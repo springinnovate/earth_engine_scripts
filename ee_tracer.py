@@ -2,13 +2,6 @@
 import ee
 
 
-def buffer_points(radius):
-    def _buffer_points(pt):
-        pt = ee.Feature(pt)
-        return pt.buffer(radius).bounds()
-    return _buffer_points
-
-
 def main():
     """Entry point."""
     ee.Initialize()
