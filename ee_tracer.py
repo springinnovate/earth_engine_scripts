@@ -25,7 +25,7 @@ def main():
             row.to_dict())
         for index, row in table.dropna().iterrows()])
 
-    img = ee.ImageCollection("LANDSAT/LT05/C01/T1_8DAY_NDVI").filterDate('1997-01-01', '2019-01-01')
+    img = ee.ImageCollection(DATASET).filterDate(START_DATE, END_DATE)
     mean_img = img.reduce(ee.Reducer.mean())
     print('starting google earth engine sample')
     REDUCER = 'first'
