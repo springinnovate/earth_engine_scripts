@@ -1,29 +1,36 @@
 """EE tracer code."""
+import os
+
 import ee
+import pandas
+
+CSV_PATH = 'cotton_site_info.csv'
 
 
 def main():
     """Entry point."""
     ee.Initialize()
-
-    img = ee.ImageCollection("LANDSAT/LT05/C01/T1_8DAY_NDVI").filterDate('1997-01-01', '2019-01-01')
+    table = pandas.read_csv(CSV_PATH)
 
     pts = ee.FeatureCollection([
-      ee.Feature(ee.Geometry.Point([-118.6010, 37.0777]), {'plot_id': 1}),
-      ee.Feature(ee.Geometry.Point([-118.5896, 37.0778]), {'plot_id': 2}),
-      ee.Feature(ee.Geometry.Point([-118.5842, 37.0805]), {'plot_id': 3}),
-      ee.Feature(ee.Geometry.Point([-118.5994, 37.0936]), {'plot_id': 4}),
-      ee.Feature(ee.Geometry.Point([-118.5861, 37.0567]), {'plot_id': 5})
-    ])
+        ee.Feature(
+            ee.Geometry.Point(row['long'], row['lat']),
+            row.to_dict())
+        for index, row in table.dropna().iterrows() if index == 1])
+    print(pts)
 
+    img = ee.ImageCollection("LANDSAT/LT05/C01/T1_8DAY_NDVI").filterDate('1997-01-01', '2019-01-01')
     mean_img = img.reduce(ee.Reducer.mean())
+    print('starting google earth engine sample')
     samples = mean_img.reduceRegions(**{
         'collection': pts,
         'scale': 30,
-        'reducer': 'mean'}).getInfo()
-    print('geometry,LANDSAT/LT05/C01/T1_8DAY_NDVI_mean')
-    for sample in samples['features']:
-        print(f"{sample['geometry']['coordinates']}, {sample['properties']['mean']}")
+        'reducer': 'first'}).getInfo()
+    with open(f'sampled_{os.path.basename(CSV_PATH)}', 'w') as table_file:
+        table_file.write(','.join(table.columns) + '\n')
+        for sample in samples['features']:
+            table_file.write(','.join([
+                str(sample['properties'][key]) for key in table.columns])+'\n')
 
 
 if __name__ == '__main__':
