@@ -6,13 +6,6 @@ import ee
 import pandas
 
 CSV_PATH = 'cotton_site_info.csv'
-
-DATASET = 'LANDSAT/LT05/C01/T1_8DAY_NDVI'
-START_DATE = '1997-01-01'
-END_DATE = '2019-01-01'
-
-HEADER_FIELD = f'{DATASET}_{START_DATE}_{END_DATE}'
-
 REDUCER = 'first'
 
 
