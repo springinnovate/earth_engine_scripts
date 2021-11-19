@@ -73,7 +73,7 @@ def _sample_pheno(pts, start_year, end_year):
 
     samples = all_bands.reduceRegions(**{
         'collection': pts,
-        'scale': 500,
+        'scale': 2000,
         'reducer': REDUCER}).getInfo()
     print(samples['features'][0])
     return header_fields, samples['features']
@@ -92,7 +92,7 @@ def main():
         for index, row in table.dropna().iterrows()])
 
     print('calculating pheno variables')
-    header_fields, sample_list = _sample_pheno(pts, 2001, 2002)
+    header_fields, sample_list = _sample_pheno(pts, 2008, 2017)
     print(header_fields)
     print(len(sample_list[0]))
     with open(f'sampled_{os.path.basename(CSV_PATH)}', 'w') as table_file:
