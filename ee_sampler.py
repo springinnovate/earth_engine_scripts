@@ -6,12 +6,13 @@ import ee
 import pandas
 
 CSV_PATH = 'data_table_citrusformatics_MKL.csv'
+YEAR_FIELD = 'crop_year'
 LONG_FIELD = 'field_longitude'
 LAT_FIELD = 'field_latitude'
 REDUCER = 'mean'
 
 
-def _sample_pheno(pts, start_year, end_year):
+def _sample_pheno(pts_by_year):
     """Sample phenology variables from https://docs.google.com/spreadsheets/d/1nbmCKwIG29PF6Un3vN6mQGgFSWG_vhB6eky7wVqVwPo"""
     DATASET_NAME = 'MODIS/006/MCD12Q2'  # 500m resolution
     # these variables are measured in days since 1-1-1970
@@ -36,19 +37,16 @@ def _sample_pheno(pts, start_year, end_year):
     epoch_date = datetime.strptime('1970-01-01', "%Y-%m-%d")
     modis_phen = ee.ImageCollection(DATASET_NAME)
     header_fields = []
+    header_fields.extend([
+        f'{DATASET_NAME}-{field}'
+        for field in julian_day_variables+raw_variables])
     sample_list = []
-    all_bands = None
-    header_field_offset = 0
-    for year in range(start_year, end_year+1):
+    for year in pts_by_year.keys():
         print(f'processing year {year}')
-        header_fields.extend([
-            f'{DATASET_NAME}-{year}-{field}'
-            for field in julian_day_variables+raw_variables])
         print(header_fields)
         current_year = datetime.strptime(f'{year}-01-01', "%Y-%m-%d")
         days_since_epoch = (current_year - epoch_date).days
-        modis_band_names = header_fields[
-            header_field_offset:header_field_offset+len(julian_day_variables)]
+        modis_band_names = header_fields[0:len(julian_day_variables)]
         print(modis_band_names)
         bands_since_1970 = modis_phen.select(
             julian_day_variables).filterDate(
@@ -56,43 +54,42 @@ def _sample_pheno(pts, start_year, end_year):
         julian_day_bands = (
             bands_since_1970.toBands()).subtract(days_since_epoch)
         julian_day_bands = julian_day_bands.rename(modis_band_names)
-        if all_bands is None:
-            all_bands = julian_day_bands
-        else:
-            all_bands = all_bands.addBands(julian_day_bands)
-        raw_band_names = header_fields[
-            header_field_offset+len(julian_day_variables)::]
+        all_bands = julian_day_bands
+        raw_band_names = header_fields[len(julian_day_variables)::]
         raw_variable_bands = modis_phen.select(
             raw_variables).filterDate(
             f'{year}-01-01', f'{year}-12-31').toBands()
         raw_variable_bands = raw_variable_bands.rename(raw_band_names)
         print(raw_band_names)
         all_bands = all_bands.addBands(raw_variable_bands)
-        header_field_offset = len(header_fields)
-        print(header_field_offset)
 
-    samples = all_bands.reduceRegions(**{
-        'collection': pts,
-        'scale': 2000,
-        'reducer': REDUCER}).getInfo()
-    print(samples['features'][0])
-    return header_fields, samples['features']
+        samples = all_bands.reduceRegions(**{
+            'collection': pts_by_year[year],
+            'scale': 2000,
+            'reducer': REDUCER}).getInfo()
+        sample_list.extend(samples['features'])
+    print(sample_list[0])
+    return header_fields, sample_list
 
 
 def main():
     """Entry point."""
     ee.Initialize()
     table = pandas.read_csv(CSV_PATH)
+    print(table[YEAR_FIELD].unique())
 
     print(f'reading points from {CSV_PATH}')
-    pts = ee.FeatureCollection([
-        ee.Feature(
-            ee.Geometry.Point(row[LONG_FIELD], row[LAT_FIELD]),
-            row.to_dict())
-        for index, row in table.dropna().iterrows()])
+    pts_by_year = {}
+    for year in table[YEAR_FIELD].unique():
+        pts_by_year[year] = ee.FeatureCollection([
+            ee.Feature(
+                ee.Geometry.Point(row[LONG_FIELD], row[LAT_FIELD]),
+                row.to_dict())
+            for index, row in table[
+                table[YEAR_FIELD] == year].dropna().iterrows()])
 
     print('calculating pheno variables')
-    header_fields, sample_list = _sample_pheno(pts, 2008, 2017)
+    header_fields, sample_list = _sample_pheno(pts_by_year)
     print(header_fields)
     print(len(sample_list[0]))
     with open(f'sampled_{os.path.basename(CSV_PATH)}', 'w') as table_file:
