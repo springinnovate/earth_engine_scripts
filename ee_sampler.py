@@ -8,30 +8,7 @@ import pandas
 CSV_PATH = 'data_table_citrusformatics_MKL.csv'
 LONG_FIELD = 'field_longitude'
 LAT_FIELD = 'field_latitude'
-REDUCER = 'first'
-
-
-def _greenup_1(pts, start_year, end_year):
-    """Calculate greenup from points at from start to end year inclusive."""
-    DATSET_NAME = "MODIS/006/MCD12Q2"
-    epoch_date = datetime.strptime('1970-01-01', "%Y-%m-%d")
-    modis_phen = ee.ImageCollection(DATSET_NAME)
-    header_fields = []
-    sample_list = []
-    for year in range(start_year, end_year+1):
-        print(f'processing year {year}')
-        header_fields.append(f'{DATSET_NAME}-{year}')
-        current_year = datetime.strptime(f'{year}-01-01', "%Y-%m-%d")
-        days_since_epoch = (current_year - epoch_date).days
-        current_year_greenup = modis_phen.select('Greenup_1').filterDate(
-            f'{year}-01-01', f'{year}-12-31')
-        img_year = (current_year_greenup.toBands()).subtract(days_since_epoch)
-        samples = img_year.reduceRegions(**{
-            'collection': pts,
-            'scale': 30,
-            'reducer': REDUCER}).getInfo()
-        sample_list.append(samples['features'])
-    return header_fields, sample_list
+REDUCER = 'mean'
 
 
 def _sample_pheno(pts, start_year, end_year):
@@ -60,31 +37,46 @@ def _sample_pheno(pts, start_year, end_year):
     modis_phen = ee.ImageCollection(DATASET_NAME)
     header_fields = []
     sample_list = []
+    all_bands = None
+    header_field_offset = 0
     for year in range(start_year, end_year+1):
         print(f'processing year {year}')
         header_fields.extend([
             f'{DATASET_NAME}-{year}-{field}'
             for field in julian_day_variables+raw_variables])
+        print(header_fields)
         current_year = datetime.strptime(f'{year}-01-01', "%Y-%m-%d")
         days_since_epoch = (current_year - epoch_date).days
-        bands_since_1970 = modis_phen.select(julian_day_variables).filterDate(
+        modis_band_names = header_fields[
+            header_field_offset:header_field_offset+len(julian_day_variables)]
+        print(modis_band_names)
+        bands_since_1970 = modis_phen.select(
+            julian_day_variables).filterDate(
             f'{year}-01-01', f'{year}-12-31')
         julian_day_bands = (
             bands_since_1970.toBands()).subtract(days_since_epoch)
-        print(type(julian_day_bands))
-        raw_variable_bands = modis_phen.select(raw_variables).filterDate(
+        julian_day_bands = julian_day_bands.rename(modis_band_names)
+        if all_bands is None:
+            all_bands = julian_day_bands
+        else:
+            all_bands = all_bands.addBands(julian_day_bands)
+        raw_band_names = header_fields[
+            header_field_offset+len(julian_day_variables)::]
+        raw_variable_bands = modis_phen.select(
+            raw_variables).filterDate(
             f'{year}-01-01', f'{year}-12-31').toBands()
-        print(type(raw_variable_bands))
+        raw_variable_bands = raw_variable_bands.rename(raw_band_names)
+        print(raw_band_names)
+        all_bands = all_bands.addBands(raw_variable_bands)
+        header_field_offset = len(header_fields)
+        print(header_field_offset)
 
-        all_bands = raw_variable_bands.addBands(julian_day_bands)
-
-        samples = all_bands.reduceRegions(**{
-            'collection': pts,
-            'scale': 500,
-            'reducer': REDUCER}).getInfo()
-        sample_list.append(samples['features'])
-        print(samples['features'][0])
-    return header_fields, sample_list
+    samples = all_bands.reduceRegions(**{
+        'collection': pts,
+        'scale': 500,
+        'reducer': REDUCER}).getInfo()
+    print(samples['features'][0])
+    return header_fields, samples['features']
 
 
 def main():
@@ -100,18 +92,19 @@ def main():
         for index, row in table.dropna().iterrows()])
 
     print('calculating pheno variables')
-    header_fields, sample_list = _sample_pheno(pts, 2001, 2019)
+    header_fields, sample_list = _sample_pheno(pts, 2001, 2002)
     print(header_fields)
+    print(len(sample_list[0]))
     with open(f'sampled_{os.path.basename(CSV_PATH)}', 'w') as table_file:
         table_file.write(
             ','.join(table.columns) + f',{",".join(header_fields)}\n')
-        for individual_samples in zip(*sample_list):
+        for sample in sample_list:
             table_file.write(','.join([
-                str(individual_samples[0]['properties'][key])
+                str(sample['properties'][key])
                 for key in table.columns]) + ',')
             table_file.write(','.join([
-                str('n/a' if REDUCER not in sample['properties'] else sample['properties'][REDUCER])
-                for sample in individual_samples]) + '\n')
+                str(sample['properties'][field])
+                for field in header_fields]) + '\n')
 
 
 if __name__ == '__main__':
