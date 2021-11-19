@@ -80,10 +80,12 @@ def _sample_pheno(pts, start_year, end_year):
 
         samples = all_bands.reduceRegions(**{
             'collection': pts,
-            'scale': 30,
+            'scale': 500,
             'reducer': REDUCER}).getInfo()
         sample_list.append(samples['features'])
+        print(samples['features'][0])
     return header_fields, sample_list
+
 
 def main():
     """Entry point."""
