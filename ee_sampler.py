@@ -45,7 +45,6 @@ def _sample_pheno(pts_by_year):
         x for field in header_fields
         for x in (field, field+'-prev-year')]
 
-    print(header_fields_with_prev_year)
     sample_list = []
     for year in pts_by_year.keys():
         print(f'processing year {year}')
@@ -65,7 +64,6 @@ def _sample_pheno(pts_by_year):
             julian_day_bands = (
                 bands_since_1970.toBands()).subtract(days_since_epoch)
             julian_day_bands = julian_day_bands.rename(modis_band_names)
-            print(f'modis_band_names {modis_band_names}')
             if all_bands is None:
                 all_bands = julian_day_bands
             else:
@@ -73,7 +71,6 @@ def _sample_pheno(pts_by_year):
             raw_band_names = [
                 x+band_name_suffix
                 for x in header_fields[len(julian_day_variables)::]]
-            print(f'raw band names: {raw_band_names}')
             raw_variable_bands = modis_phen.select(
                 raw_variables).filterDate(
                 f'{active_year}-01-01', f'{active_year}-12-31').toBands()
@@ -85,8 +82,6 @@ def _sample_pheno(pts_by_year):
             'scale': 2000,
             'reducer': REDUCER}).getInfo()
         sample_list.extend(samples['features'])
-        break
-    print(sample_list[0])
     return header_fields_with_prev_year, sample_list
 
 
