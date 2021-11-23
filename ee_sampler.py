@@ -36,40 +36,58 @@ def _sample_pheno(pts_by_year):
 
     epoch_date = datetime.strptime('1970-01-01', "%Y-%m-%d")
     modis_phen = ee.ImageCollection(DATASET_NAME)
-    header_fields = []
-    header_fields.extend([
+
+    header_fields = [
         f'{DATASET_NAME}-{field}'
-        for field in julian_day_variables+raw_variables])
+        for field in julian_day_variables+raw_variables]
+
+    header_fields_with_prev_year = [
+        x for field in header_fields
+        for x in (field, field+'-prev-year')]
+
+    print(header_fields_with_prev_year)
     sample_list = []
     for year in pts_by_year.keys():
         print(f'processing year {year}')
-        print(header_fields)
-        current_year = datetime.strptime(f'{year}-01-01', "%Y-%m-%d")
-        days_since_epoch = (current_year - epoch_date).days
-        modis_band_names = header_fields[0:len(julian_day_variables)]
-        print(modis_band_names)
-        bands_since_1970 = modis_phen.select(
-            julian_day_variables).filterDate(
-            f'{year}-01-01', f'{year}-12-31')
-        julian_day_bands = (
-            bands_since_1970.toBands()).subtract(days_since_epoch)
-        julian_day_bands = julian_day_bands.rename(modis_band_names)
-        all_bands = julian_day_bands
-        raw_band_names = header_fields[len(julian_day_variables)::]
-        raw_variable_bands = modis_phen.select(
-            raw_variables).filterDate(
-            f'{year}-01-01', f'{year}-12-31').toBands()
-        raw_variable_bands = raw_variable_bands.rename(raw_band_names)
-        print(raw_band_names)
-        all_bands = all_bands.addBands(raw_variable_bands)
+        year_points = pts_by_year[year]
+        all_bands = None
+        for active_year, band_name_suffix in (
+                (year, ''), (year-1, '-prev-year')):
+            current_year = datetime.strptime(
+                f'{active_year}-01-01', "%Y-%m-%d")
+            days_since_epoch = (current_year - epoch_date).days
+            modis_band_names = [
+                x+band_name_suffix
+                for x in header_fields[0:len(julian_day_variables)]]
+            bands_since_1970 = modis_phen.select(
+                julian_day_variables).filterDate(
+                f'{active_year}-01-01', f'{active_year}-12-31')
+            julian_day_bands = (
+                bands_since_1970.toBands()).subtract(days_since_epoch)
+            julian_day_bands = julian_day_bands.rename(modis_band_names)
+            print(f'modis_band_names {modis_band_names}')
+            if all_bands is None:
+                all_bands = julian_day_bands
+            else:
+                all_bands = all_bands.addBands(julian_day_bands)
+            raw_band_names = [
+                x+band_name_suffix
+                for x in header_fields[len(julian_day_variables)::]]
+            print(f'raw band names: {raw_band_names}')
+            raw_variable_bands = modis_phen.select(
+                raw_variables).filterDate(
+                f'{active_year}-01-01', f'{active_year}-12-31').toBands()
+            raw_variable_bands = raw_variable_bands.rename(raw_band_names)
+            all_bands = all_bands.addBands(raw_variable_bands)
 
         samples = all_bands.reduceRegions(**{
-            'collection': pts_by_year[year],
+            'collection': year_points,
             'scale': 2000,
             'reducer': REDUCER}).getInfo()
         sample_list.extend(samples['features'])
+        break
     print(sample_list[0])
-    return header_fields, sample_list
+    return header_fields_with_prev_year, sample_list
 
 
 def main():
