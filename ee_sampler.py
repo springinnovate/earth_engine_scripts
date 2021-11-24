@@ -1,17 +1,13 @@
 """EE tracer code."""
 from datetime import datetime
+import argparse
 import os
 
 import ee
 import numpy
 import pandas
 
-CSV_PATH = 'data_table_citrusformatics_MKL.csv'
-YEAR_FIELD = 'crop_year'
-LONG_FIELD = 'field_longitude'
-LAT_FIELD = 'field_latitude'
 REDUCER = 'mean'
-BUFFER = 2000
 NLCD_DATASET = 'USGS/NLCD_RELEASES/2016_REL'
 NLCD_VALID_YEARS = numpy.array([
     1992, 2001, 2004, 2006, 2008, 2011, 2013, 2016])
@@ -19,11 +15,11 @@ NLCD_CLOSEST_YEAR_FIELD = 'NLCD-year'
 NLCD_NATURAL_FIELD = 'NLCD-natural'
 NLCD_CULTIVATED_FIELD = 'NLCD-cultivated'
 
-COOPERNICUS_DATASET = 'COPERNICUS/CORINE/V20/100m'
-COOPERNICUS_VALID_YEARS = numpy.array([1990, 2000, 2006, 2012, 2018])
-COOPERNICUS_CLOSEST_YEAR_FIELD = 'COOPERNICUS-year'
-COOPERNICUS_NATURAL_FIELD = 'COOPERNICUS-natural'
-COOPERNICUS_CULTIVATED_FIELD = 'COOPERNICUS-cultivated'
+CORINE_DATASET = 'COPERNICUS/CORINE/V20/100m'
+CORINE_VALID_YEARS = numpy.array([1990, 2000, 2006, 2012, 2018])
+CORINE_CLOSEST_YEAR_FIELD = 'CORINE-year'
+CORINE_NATURAL_FIELD = 'CORINE-natural'
+CORINE_CULTIVATED_FIELD = 'CORINE-cultivated'
 
 PREV_YEAR_TAG = '-prev-year'
 
@@ -34,33 +30,31 @@ def _get_closest_num(number_list, candidate):
     return number_list[index]
 
 
-def _coopernicus_natural_cultivated_mask(year):
+def _CORINE_natural_cultivated_mask(year):
     """Natural: 311-423, Cultivated: 211 - 244."""
     print(year)
-    closest_year = _get_closest_num(COOPERNICUS_VALID_YEARS, year)
-    coopernicus_dataset = ee.ImageCollection(
-        COOPERNICUS_DATASET)
-    #coopernicus_landcover = coopernicus_dataset.select(
-    #    'landcover').select('landcover').toBands()
+    closest_year = _get_closest_num(CORINE_VALID_YEARS, year)
+    corine_imagecollection = ee.ImageCollection(
+        CORINE_DATASET)
 
-    coopernicus_landcover = coopernicus_dataset.filter(
+    corine_landcover = corine_imagecollection.filter(
         ee.Filter.eq('system:index', closest_year)).first().select('landcover')
 
     natural_mask = ee.Image(0).where(
-        coopernicus_landcover.gte(311).And(coopernicus_landcover.lte(423)), 1)
-    natural_mask = natural_mask.rename(COOPERNICUS_NATURAL_FIELD)
+        corine_landcover.gte(311).And(corine_landcover.lte(423)), 1)
+    natural_mask = natural_mask.rename(CORINE_NATURAL_FIELD)
 
     cultivated_mask = ee.Image(0).where(
-        coopernicus_landcover.gte(211).And(coopernicus_landcover.lte(244)), 1)
-    cultivated_mask = cultivated_mask.rename(COOPERNICUS_CULTIVATED_FIELD)
+        corine_landcover.gte(211).And(corine_landcover.lte(244)), 1)
+    cultivated_mask = cultivated_mask.rename(CORINE_CULTIVATED_FIELD)
     return natural_mask, cultivated_mask, closest_year
 
 
 def _nlcd_natural_cultivated_mask(year):
     """Natural for NLCD in 41-74 or 90-95."""
     closest_year = _get_closest_num(NLCD_VALID_YEARS, year)
-    nlcd_dataset = ee.ImageCollection(NLCD_DATASET)
-    nlcd_year = nlcd_dataset.filter(
+    nlcd_imagecollection = ee.ImageCollection(NLCD_DATASET)
+    nlcd_year = nlcd_imagecollection.filter(
         ee.Filter.eq('system:index', closest_year)).first().select('landcover')
     # natural 41-74 & 90-95
     natural_mask = ee.Image(0).where(
@@ -110,14 +104,14 @@ def _sample_pheno(pts_by_year):
             field+NLCD_NATURAL_FIELD, field+PREV_YEAR_TAG+NLCD_NATURAL_FIELD,
             field+NLCD_CULTIVATED_FIELD,
             field+PREV_YEAR_TAG+NLCD_CULTIVATED_FIELD,
-            field+COOPERNICUS_CULTIVATED_FIELD,
-            field+PREV_YEAR_TAG+COOPERNICUS_CULTIVATED_FIELD)]
+            field+CORINE_CULTIVATED_FIELD,
+            field+PREV_YEAR_TAG+CORINE_CULTIVATED_FIELD)]
     header_fields_with_prev_year.append(NLCD_NATURAL_FIELD)
     header_fields_with_prev_year.append(NLCD_CULTIVATED_FIELD)
     header_fields_with_prev_year.append(NLCD_CLOSEST_YEAR_FIELD)
-    header_fields_with_prev_year.append(COOPERNICUS_NATURAL_FIELD)
-    header_fields_with_prev_year.append(COOPERNICUS_CULTIVATED_FIELD)
-    header_fields_with_prev_year.append(COOPERNICUS_CLOSEST_YEAR_FIELD)
+    header_fields_with_prev_year.append(CORINE_NATURAL_FIELD)
+    header_fields_with_prev_year.append(CORINE_CULTIVATED_FIELD)
+    header_fields_with_prev_year.append(CORINE_CLOSEST_YEAR_FIELD)
 
     sample_list = []
     for year in pts_by_year.keys():
@@ -129,8 +123,8 @@ def _sample_pheno(pts_by_year):
         nlcd_natural_mask, nlcd_cultivated_mask, nlcd_closest_year = \
             _nlcd_natural_cultivated_mask(year)
 
-        coopernicus_natural_mask, coopernicus_cultivated_mask, coopernicus_closest_year = \
-            _coopernicus_natural_cultivated_mask(year)
+        CORINE_natural_mask, CORINE_cultivated_mask, CORINE_closest_year = \
+            _CORINE_natural_cultivated_mask(year)
 
         for active_year, band_name_suffix in (
                 (year, ''), (year-1, PREV_YEAR_TAG)):
@@ -171,18 +165,18 @@ def _sample_pheno(pts_by_year):
                 band_name+NLCD_NATURAL_FIELD
                 for band_name in all_band_names])
 
-            coopernicus_cultivated_variable_bands = \
-                local_band_stack.updateMask(coopernicus_cultivated_mask.eq(1))
-            coopernicus_cultivated_variable_bands = \
-                coopernicus_cultivated_variable_bands.rename([
-                    band_name+COOPERNICUS_CULTIVATED_FIELD
+            CORINE_cultivated_variable_bands = \
+                local_band_stack.updateMask(CORINE_cultivated_mask.eq(1))
+            CORINE_cultivated_variable_bands = \
+                CORINE_cultivated_variable_bands.rename([
+                    band_name+CORINE_CULTIVATED_FIELD
                     for band_name in all_band_names])
 
-            coopernicus_natural_variable_bands = local_band_stack.updateMask(
-                coopernicus_natural_mask.eq(1))
-            coopernicus_natural_variable_bands = \
-                coopernicus_natural_variable_bands.rename([
-                    band_name+COOPERNICUS_NATURAL_FIELD
+            CORINE_natural_variable_bands = local_band_stack.updateMask(
+                CORINE_natural_mask.eq(1))
+            CORINE_natural_variable_bands = \
+                CORINE_natural_variable_bands.rename([
+                    band_name+CORINE_NATURAL_FIELD
                     for band_name in all_band_names])
 
             if all_bands is None:
@@ -191,8 +185,8 @@ def _sample_pheno(pts_by_year):
                 all_bands = all_bands.addBands(local_band_stack)
             all_bands = all_bands.addBands(nlcd_cultivated_variable_bands)
             all_bands = all_bands.addBands(nlcd_natural_variable_bands)
-            all_bands = all_bands.addBands(coopernicus_cultivated_variable_bands)
-            all_bands = all_bands.addBands(coopernicus_natural_variable_bands)
+            all_bands = all_bands.addBands(CORINE_cultivated_variable_bands)
+            all_bands = all_bands.addBands(CORINE_natural_variable_bands)
 
             # mask raw variable bands by natural
 
@@ -200,15 +194,15 @@ def _sample_pheno(pts_by_year):
 
         nlcd_closest_year_image = ee.Image(
             int(nlcd_closest_year)).rename(NLCD_CLOSEST_YEAR_FIELD)
-        coopernicus_closest_year_image = ee.Image(
-            int(coopernicus_closest_year)).rename(
-            COOPERNICUS_CLOSEST_YEAR_FIELD)
+        CORINE_closest_year_image = ee.Image(
+            int(CORINE_closest_year)).rename(
+            CORINE_CLOSEST_YEAR_FIELD)
         all_bands = all_bands.addBands(nlcd_natural_mask)
         all_bands = all_bands.addBands(nlcd_cultivated_mask)
         all_bands = all_bands.addBands(nlcd_closest_year_image)
-        all_bands = all_bands.addBands(coopernicus_natural_mask)
-        all_bands = all_bands.addBands(coopernicus_cultivated_mask)
-        all_bands = all_bands.addBands(coopernicus_closest_year_image)
+        all_bands = all_bands.addBands(CORINE_natural_mask)
+        all_bands = all_bands.addBands(CORINE_cultivated_mask)
+        all_bands = all_bands.addBands(CORINE_closest_year_image)
         print('reduce regions')
         samples = all_bands.reduceRegions(**{
             'collection': year_points,
@@ -220,25 +214,39 @@ def _sample_pheno(pts_by_year):
 
 def main():
     """Entry point."""
-    ee.Initialize()
-    table = pandas.read_csv(CSV_PATH)
-    print(table[YEAR_FIELD].unique())
+    parser = argparse.ArgumentParser(
+        description='sample points on GEE data')
+    parser.add_argument('csv_path', help='path to CSV data table')
+    parser.add_argument('--year_field', default='crop_year', help='field name in csv_path for year, default `year_field`')
+    parser.add_argument('--long_field', default='field_longitude', help='field name in csv_path for longitude, default `long_field`')
+    parser.add_argument('--lat_field', default='field_latitude', help='field name in csv_path for latitude, default `lat_field')
+    parser.add_argument('--buffer', default=1000, help='buffer distance in meters around point to do aggregate analysis, default 1000m')
+    parser.add_argument('--ncld', action='store_true', help='use NCLD landcover for cultivated/natural masks')
+    parser.add_argument('--corine', action='store_true', help='use CORINE landcover for cultivated/natural masks')
+    args = parser.parse_args()
 
-    print(f'reading points from {CSV_PATH}')
+    if not any([args.nlcd, args.corine]):
+        raise ValueError('must select at least --nlcd or --corine LULC datasets')
+
+    ee.Initialize()
+    table = pandas.read_csv(args.csv_path)
+    print(table[args.year_field].unique())
+
+    print(f'reading points from {args.csv_path}')
     pts_by_year = {}
-    for year in table[YEAR_FIELD].unique():
+    for year in table[args.year_field].unique():
         pts_by_year[year] = ee.FeatureCollection([
             ee.Feature(
-                ee.Geometry.Point(row[LONG_FIELD], row[LAT_FIELD]).buffer(BUFFER),
+                ee.Geometry.Point(row[args.long_field], row[args.lat_field]).buffer(args.buffer),
                 row.to_dict())
             for index, row in table[
-                table[YEAR_FIELD] == year].dropna().iterrows()])
+                table[args.year_field] == year].dropna().iterrows()])
 
     print('calculating pheno variables')
     header_fields, sample_list = _sample_pheno(pts_by_year)
     print(header_fields)
     print(len(sample_list[0]))
-    with open(f'sampled_{BUFFER}m_{os.path.basename(CSV_PATH)}', 'w') as table_file:
+    with open(f'sampled_{args.buffer}m_{os.path.basename(args.csv_path)}', 'w') as table_file:
         table_file.write(
             ','.join(table.columns) + f',{",".join(header_fields)}\n')
         for sample in sample_list:
