@@ -11,12 +11,14 @@ YEAR_FIELD = 'crop_year'
 LONG_FIELD = 'field_longitude'
 LAT_FIELD = 'field_latitude'
 REDUCER = 'mean'
-BUFFER = 300
+BUFFER = 3000
 NLCD_DATASET = 'USGS/NLCD_RELEASES/2016_REL'
 NLCD_VALID_YEARS = numpy.array([
     1992, 2001, 2004, 2006, 2008, 2011, 2013, 2016])
 NLCD_CLOSEST_YEAR_FIELD = 'nlcd-year'
-
+NLCD_NATURAL_FIELD = 'NLCD-natural'
+NLCD_CULTIVATED_FIELD = 'NLCD-cultivated'
+PREV_YEAR_TAG = '-prev-year'
 
 def _get_closest_num(number_list, candidate):
     """Return closest number in sorted list."""
@@ -37,11 +39,11 @@ def _nlcd_natural_cultivated_mask(year):
     natural_mask = ee.Image(0).where(
         nlcd_year.gte(41).And(nlcd_year.lte(74)).Or(
             nlcd_year.gte(90).And(nlcd_year.lte(95))), 1)
-    natural_mask = natural_mask.rename(f'NLCD-natural')
+    natural_mask = natural_mask.rename(NLCD_NATURAL_FIELD)
 
     cultivated_mask = ee.Image(0).where(
         nlcd_year.gte(81).And(nlcd_year.lte(82)), 1)
-    cultivated_mask = natural_mask.rename(f'NLCD-cultivated')
+    cultivated_mask = natural_mask.rename(NLCD_CULTIVATED_FIELD)
     return natural_mask, cultivated_mask, closest_year
 
 
@@ -76,9 +78,13 @@ def _sample_pheno(pts_by_year):
 
     header_fields_with_prev_year = [
         x for field in header_fields
-        for x in (field, field+'-prev-year')]
-    header_fields_with_prev_year.append(f'NLCD-natural')
-    header_fields_with_prev_year.append(f'NLCD-cultivated')
+        for x in (
+            field, field+PREV_YEAR_TAG,
+            field+NLCD_NATURAL_FIELD, field+PREV_YEAR_TAG+NLCD_NATURAL_FIELD,
+            field+NLCD_CULTIVATED_FIELD,
+            field+PREV_YEAR_TAG+NLCD_CULTIVATED_FIELD)]
+    header_fields_with_prev_year.append(NLCD_NATURAL_FIELD)
+    header_fields_with_prev_year.append(NLCD_CULTIVATED_FIELD)
     header_fields_with_prev_year.append(NLCD_CLOSEST_YEAR_FIELD)
 
     sample_list = []
@@ -92,7 +98,7 @@ def _sample_pheno(pts_by_year):
             _nlcd_natural_cultivated_mask(year)
 
         for active_year, band_name_suffix in (
-                (year, ''), (year-1, '-prev-year')):
+                (year, ''), (year-1, PREV_YEAR_TAG)):
             current_year = datetime.strptime(
                 f'{active_year}-01-01', "%Y-%m-%d")
             days_since_epoch = (current_year - epoch_date).days
@@ -105,10 +111,6 @@ def _sample_pheno(pts_by_year):
             julian_day_bands = (
                 bands_since_1970.toBands()).subtract(days_since_epoch)
             julian_day_bands = julian_day_bands.rename(modis_band_names)
-            if all_bands is None:
-                all_bands = julian_day_bands
-            else:
-                all_bands = all_bands.addBands(julian_day_bands)
             raw_band_names = [
                 x+band_name_suffix
                 for x in header_fields[len(julian_day_variables)::]]
@@ -116,15 +118,32 @@ def _sample_pheno(pts_by_year):
                 raw_variables).filterDate(
                 f'{active_year}-01-01', f'{active_year}-12-31').toBands()
             raw_variable_bands = raw_variable_bands.rename(raw_band_names)
-            all_bands = all_bands.addBands(raw_variable_bands)
 
+            local_band_stack = julian_day_bands.addBands(raw_variable_bands)
             # mask raw variable bands by cultivated
             #ImageCollection.iterate(algorithm, first)
-            cultivated_variable_bands = ee.Image([None]*len(raw_band_names)).where(
-                nlcd_cultivated_mask.eq(1), raw_variable_bands)
-            print(raw_variable_bands)
-            print(cultivated_variable_bands)
-            #all_bands = all_bands.add(cultivated_variable_bands)
+            print(len(modis_band_names+raw_band_names))
+            all_band_names = modis_band_names+raw_band_names
+            cultivated_variable_bands = local_band_stack.updateMask(
+                nlcd_cultivated_mask.eq(1))
+            print(all_band_names)
+            cultivated_variable_bands = cultivated_variable_bands.rename([
+                band_name+NLCD_CULTIVATED_FIELD
+                for band_name in all_band_names])
+
+            natural_variable_bands = local_band_stack.updateMask(
+                nlcd_natural_mask.eq(1))
+            print(all_band_names)
+            natural_variable_bands = natural_variable_bands.rename([
+                band_name+NLCD_NATURAL_FIELD
+                for band_name in all_band_names])
+
+            if all_bands is None:
+                all_bands = local_band_stack
+            else:
+                all_bands = all_bands.addBands(local_band_stack)
+            all_bands = all_bands.addBands(cultivated_variable_bands)
+            all_bands = all_bands.addBands(natural_variable_bands)
 
             # mask raw variable bands by natural
 
@@ -132,8 +151,6 @@ def _sample_pheno(pts_by_year):
 
         nlcd_closest_year_image = ee.Image(
             int(closest_year)).rename(NLCD_CLOSEST_YEAR_FIELD)
-        print(nlcd_closest_year_image)
-
         all_bands = all_bands.addBands(nlcd_natural_mask)
         all_bands = all_bands.addBands(nlcd_cultivated_mask)
         all_bands = all_bands.addBands(nlcd_closest_year_image)
