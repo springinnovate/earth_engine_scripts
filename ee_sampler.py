@@ -11,14 +11,22 @@ YEAR_FIELD = 'crop_year'
 LONG_FIELD = 'field_longitude'
 LAT_FIELD = 'field_latitude'
 REDUCER = 'mean'
-BUFFER = 3000
+BUFFER = 2000
 NLCD_DATASET = 'USGS/NLCD_RELEASES/2016_REL'
 NLCD_VALID_YEARS = numpy.array([
     1992, 2001, 2004, 2006, 2008, 2011, 2013, 2016])
-NLCD_CLOSEST_YEAR_FIELD = 'nlcd-year'
+NLCD_CLOSEST_YEAR_FIELD = 'NLCD-year'
 NLCD_NATURAL_FIELD = 'NLCD-natural'
 NLCD_CULTIVATED_FIELD = 'NLCD-cultivated'
+
+COOPERNICUS_DATASET = 'COPERNICUS/CORINE/V20/100m'
+COOPERNICUS_VALID_YEARS = numpy.array([1990, 2000, 2006, 2012, 2018])
+COOPERNICUS_CLOSEST_YEAR_FIELD = 'COOPERNICUS-year'
+COOPERNICUS_NATURAL_FIELD = 'COOPERNICUS-natural'
+COOPERNICUS_CULTIVATED_FIELD = 'COOPERNICUS-cultivated'
+
 PREV_YEAR_TAG = '-prev-year'
+
 
 def _get_closest_num(number_list, candidate):
     """Return closest number in sorted list."""
@@ -27,6 +35,28 @@ def _get_closest_num(number_list, candidate):
         index -= 1
     closest_candidate = str(number_list[index])
     return closest_candidate
+
+
+def _coopernicus_natural_cultivated_mask(year):
+    """Natural: 311-423, Cultivated: 211 - 244."""
+    print(year)
+    closest_year = _get_closest_num(COOPERNICUS_VALID_YEARS, year)
+    coopernicus_dataset = ee.ImageCollection(
+        COOPERNICUS_DATASET)
+    #coopernicus_landcover = coopernicus_dataset.select(
+    #    'landcover').select('landcover').toBands()
+
+    coopernicus_landcover = coopernicus_dataset.filter(
+        ee.Filter.eq('system:index', closest_year)).first().select('landcover')
+
+    natural_mask = ee.Image(0).where(
+        coopernicus_landcover.gte(311).And(coopernicus_landcover.lte(423)), 1)
+    natural_mask = natural_mask.rename(COOPERNICUS_NATURAL_FIELD)
+
+    cultivated_mask = ee.Image(0).where(
+        coopernicus_landcover.gte(211).And(coopernicus_landcover.lte(244)), 1)
+    cultivated_mask = cultivated_mask.rename(COOPERNICUS_CULTIVATED_FIELD)
+    return natural_mask, cultivated_mask, closest_year
 
 
 def _nlcd_natural_cultivated_mask(year):
@@ -43,7 +73,7 @@ def _nlcd_natural_cultivated_mask(year):
 
     cultivated_mask = ee.Image(0).where(
         nlcd_year.gte(81).And(nlcd_year.lte(82)), 1)
-    cultivated_mask = natural_mask.rename(NLCD_CULTIVATED_FIELD)
+    cultivated_mask = cultivated_mask.rename(NLCD_CULTIVATED_FIELD)
     return natural_mask, cultivated_mask, closest_year
 
 
@@ -82,10 +112,15 @@ def _sample_pheno(pts_by_year):
             field, field+PREV_YEAR_TAG,
             field+NLCD_NATURAL_FIELD, field+PREV_YEAR_TAG+NLCD_NATURAL_FIELD,
             field+NLCD_CULTIVATED_FIELD,
-            field+PREV_YEAR_TAG+NLCD_CULTIVATED_FIELD)]
+            field+PREV_YEAR_TAG+NLCD_CULTIVATED_FIELD,
+            field+COOPERNICUS_CULTIVATED_FIELD,
+            field+PREV_YEAR_TAG+COOPERNICUS_CULTIVATED_FIELD)]
     header_fields_with_prev_year.append(NLCD_NATURAL_FIELD)
     header_fields_with_prev_year.append(NLCD_CULTIVATED_FIELD)
     header_fields_with_prev_year.append(NLCD_CLOSEST_YEAR_FIELD)
+    header_fields_with_prev_year.append(COOPERNICUS_NATURAL_FIELD)
+    header_fields_with_prev_year.append(COOPERNICUS_CULTIVATED_FIELD)
+    header_fields_with_prev_year.append(COOPERNICUS_CLOSEST_YEAR_FIELD)
 
     sample_list = []
     for year in pts_by_year.keys():
@@ -94,8 +129,11 @@ def _sample_pheno(pts_by_year):
         print(type(year_points))
         all_bands = None
 
-        nlcd_natural_mask, nlcd_cultivated_mask, closest_year = \
+        nlcd_natural_mask, nlcd_cultivated_mask, nlcd_closest_year = \
             _nlcd_natural_cultivated_mask(year)
+
+        coopernicus_natural_mask, coopernicus_cultivated_mask, coopernicus_closest_year = \
+            _coopernicus_natural_cultivated_mask(year)
 
         for active_year, band_name_suffix in (
                 (year, ''), (year-1, PREV_YEAR_TAG)):
@@ -120,40 +158,60 @@ def _sample_pheno(pts_by_year):
             raw_variable_bands = raw_variable_bands.rename(raw_band_names)
 
             local_band_stack = julian_day_bands.addBands(raw_variable_bands)
-            # mask raw variable bands by cultivated
-            #ImageCollection.iterate(algorithm, first)
-            print(len(modis_band_names+raw_band_names))
             all_band_names = modis_band_names+raw_band_names
-            cultivated_variable_bands = local_band_stack.updateMask(
-                nlcd_cultivated_mask.eq(1))
-            print(all_band_names)
-            cultivated_variable_bands = cultivated_variable_bands.rename([
-                band_name+NLCD_CULTIVATED_FIELD
-                for band_name in all_band_names])
 
-            natural_variable_bands = local_band_stack.updateMask(
+            # mask raw variable bands by cultivated/natural
+            nlcd_cultivated_variable_bands = local_band_stack.updateMask(
+                nlcd_cultivated_mask.eq(1))
+            nlcd_cultivated_variable_bands = \
+                nlcd_cultivated_variable_bands.rename([
+                    band_name+NLCD_CULTIVATED_FIELD
+                    for band_name in all_band_names])
+
+            nlcd_natural_variable_bands = local_band_stack.updateMask(
                 nlcd_natural_mask.eq(1))
-            print(all_band_names)
-            natural_variable_bands = natural_variable_bands.rename([
+            nlcd_natural_variable_bands = nlcd_natural_variable_bands.rename([
                 band_name+NLCD_NATURAL_FIELD
                 for band_name in all_band_names])
+
+            coopernicus_cultivated_variable_bands = \
+                local_band_stack.updateMask(coopernicus_cultivated_mask.eq(1))
+            coopernicus_cultivated_variable_bands = \
+                coopernicus_cultivated_variable_bands.rename([
+                    band_name+COOPERNICUS_CULTIVATED_FIELD
+                    for band_name in all_band_names])
+
+            coopernicus_natural_variable_bands = local_band_stack.updateMask(
+                coopernicus_natural_mask.eq(1))
+            coopernicus_natural_variable_bands = \
+                coopernicus_natural_variable_bands.rename([
+                    band_name+COOPERNICUS_NATURAL_FIELD
+                    for band_name in all_band_names])
 
             if all_bands is None:
                 all_bands = local_band_stack
             else:
                 all_bands = all_bands.addBands(local_band_stack)
-            all_bands = all_bands.addBands(cultivated_variable_bands)
-            all_bands = all_bands.addBands(natural_variable_bands)
+            all_bands = all_bands.addBands(nlcd_cultivated_variable_bands)
+            all_bands = all_bands.addBands(nlcd_natural_variable_bands)
+            all_bands = all_bands.addBands(coopernicus_cultivated_variable_bands)
+            all_bands = all_bands.addBands(coopernicus_natural_variable_bands)
 
             # mask raw variable bands by natural
 
         print('append bands')
 
         nlcd_closest_year_image = ee.Image(
-            int(closest_year)).rename(NLCD_CLOSEST_YEAR_FIELD)
+            int(nlcd_closest_year)).rename(NLCD_CLOSEST_YEAR_FIELD)
+        coopernicus_closest_year_image = ee.Image(
+            int(coopernicus_closest_year)).rename(
+            COOPERNICUS_CLOSEST_YEAR_FIELD)
         all_bands = all_bands.addBands(nlcd_natural_mask)
         all_bands = all_bands.addBands(nlcd_cultivated_mask)
         all_bands = all_bands.addBands(nlcd_closest_year_image)
+        all_bands = all_bands.addBands(coopernicus_natural_mask)
+        all_bands = all_bands.addBands(coopernicus_cultivated_mask)
+        all_bands = all_bands.addBands(coopernicus_closest_year_image)
         print('reduce regions')
         samples = all_bands.reduceRegions(**{
             'collection': year_points,
