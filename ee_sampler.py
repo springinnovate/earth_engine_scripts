@@ -13,7 +13,9 @@ LAT_FIELD = 'field_latitude'
 REDUCER = 'mean'
 BUFFER = 300
 NLCD_DATASET = 'USGS/NLCD_RELEASES/2016_REL'
-NLCD_VALID_YEARS = numpy.array([1992, 2001, 2004, 2006, 2008, 2011, 2013, 2016])
+NLCD_VALID_YEARS = numpy.array([
+    1992, 2001, 2004, 2006, 2008, 2011, 2013, 2016])
+NLCD_CLOSEST_YEAR_FIELD = 'nlcd-year'
 
 
 def _get_closest_num(number_list, candidate):
@@ -77,11 +79,13 @@ def _sample_pheno(pts_by_year):
         for x in (field, field+'-prev-year')]
     header_fields_with_prev_year.append(f'NLCD-natural')
     header_fields_with_prev_year.append(f'NLCD-cultivated')
+    header_fields_with_prev_year.append(NLCD_CLOSEST_YEAR_FIELD)
 
     sample_list = []
     for year in pts_by_year.keys():
         print(f'processing year {year}')
         year_points = pts_by_year[year]
+        print(type(year_points))
         all_bands = None
 
         nlcd_natural_mask, nlcd_cultivated_mask, closest_year = \
@@ -118,13 +122,21 @@ def _sample_pheno(pts_by_year):
             #ImageCollection.iterate(algorithm, first)
             cultivated_variable_bands = ee.Image([None]*len(raw_band_names)).where(
                 nlcd_cultivated_mask.eq(1), raw_variable_bands)
-            all_bands = all_bands.add(cultivated_variable_bands)
+            print(raw_variable_bands)
+            print(cultivated_variable_bands)
+            #all_bands = all_bands.add(cultivated_variable_bands)
 
             # mask raw variable bands by natural
 
         print('append bands')
+
+        nlcd_closest_year_image = ee.Image(
+            int(closest_year)).rename(NLCD_CLOSEST_YEAR_FIELD)
+        print(nlcd_closest_year_image)
+
         all_bands = all_bands.addBands(nlcd_natural_mask)
         all_bands = all_bands.addBands(nlcd_cultivated_mask)
+        all_bands = all_bands.addBands(nlcd_closest_year_image)
         print('reduce regions')
         samples = all_bands.reduceRegions(**{
             'collection': year_points,
