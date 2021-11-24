@@ -30,11 +30,8 @@ PREV_YEAR_TAG = '-prev-year'
 
 def _get_closest_num(number_list, candidate):
     """Return closest number in sorted list."""
-    index = numpy.searchsorted(number_list, candidate)
-    if index == len(number_list):
-        index -= 1
-    closest_candidate = str(number_list[index])
-    return closest_candidate
+    index = (numpy.abs(number_list - candidate)).argmin()
+    return number_list[index]
 
 
 def _coopernicus_natural_cultivated_mask(year):
