@@ -30,7 +30,7 @@ def _get_closest_num(number_list, candidate):
     return number_list[index]
 
 
-def _CORINE_natural_cultivated_mask(year):
+def _corine_natural_cultivated_mask(year):
     """Natural: 311-423, Cultivated: 211 - 244."""
     print(year)
     closest_year = _get_closest_num(CORINE_VALID_YEARS, year)
@@ -68,7 +68,7 @@ def _nlcd_natural_cultivated_mask(year):
     return natural_mask, cultivated_mask, closest_year
 
 
-def _sample_pheno(pts_by_year):
+def _sample_pheno(pts_by_year, nlcd_flag, corine_flag):
     """Sample phenology variables from https://docs.google.com/spreadsheets/d/1nbmCKwIG29PF6Un3vN6mQGgFSWG_vhB6eky7wVqVwPo"""
     DATASET_NAME = 'MODIS/006/MCD12Q2'  # 500m resolution
     # these variables are measured in days since 1-1-1970
@@ -98,20 +98,35 @@ def _sample_pheno(pts_by_year):
         for field in julian_day_variables+raw_variables]
 
     header_fields_with_prev_year = [
-        x for field in header_fields
-        for x in (
-            field, field+PREV_YEAR_TAG,
-            field+NLCD_NATURAL_FIELD, field+PREV_YEAR_TAG+NLCD_NATURAL_FIELD,
-            field+NLCD_CULTIVATED_FIELD,
-            field+PREV_YEAR_TAG+NLCD_CULTIVATED_FIELD,
-            field+CORINE_CULTIVATED_FIELD,
-            field+PREV_YEAR_TAG+CORINE_CULTIVATED_FIELD)]
-    header_fields_with_prev_year.append(NLCD_NATURAL_FIELD)
-    header_fields_with_prev_year.append(NLCD_CULTIVATED_FIELD)
-    header_fields_with_prev_year.append(NLCD_CLOSEST_YEAR_FIELD)
-    header_fields_with_prev_year.append(CORINE_NATURAL_FIELD)
-    header_fields_with_prev_year.append(CORINE_CULTIVATED_FIELD)
-    header_fields_with_prev_year.append(CORINE_CLOSEST_YEAR_FIELD)
+        x for field in header_fields for x in (field, field+PREV_YEAR_TAG)]
+
+    if nlcd_flag:
+        header_fields_with_prev_year += [
+            x for field in header_fields
+            for x in (
+                field+NLCD_NATURAL_FIELD,
+                field+PREV_YEAR_TAG+NLCD_NATURAL_FIELD,
+                field+NLCD_CULTIVATED_FIELD,
+                field+PREV_YEAR_TAG+NLCD_CULTIVATED_FIELD)]
+
+    if corine_flag:
+        header_fields_with_prev_year += [
+            x for field in header_fields
+            for x in (
+                field+CORINE_NATURAL_FIELD,
+                field+PREV_YEAR_TAG+CORINE_NATURAL_FIELD,
+                field+CORINE_CULTIVATED_FIELD,
+                field+PREV_YEAR_TAG+CORINE_CULTIVATED_FIELD)]
+
+    if nlcd_flag:
+        header_fields_with_prev_year.append(NLCD_NATURAL_FIELD)
+        header_fields_with_prev_year.append(NLCD_CULTIVATED_FIELD)
+        header_fields_with_prev_year.append(NLCD_CLOSEST_YEAR_FIELD)
+
+    if corine_flag:
+        header_fields_with_prev_year.append(CORINE_NATURAL_FIELD)
+        header_fields_with_prev_year.append(CORINE_CULTIVATED_FIELD)
+        header_fields_with_prev_year.append(CORINE_CLOSEST_YEAR_FIELD)
 
     sample_list = []
     for year in pts_by_year.keys():
@@ -120,11 +135,13 @@ def _sample_pheno(pts_by_year):
         print(type(year_points))
         all_bands = None
 
-        nlcd_natural_mask, nlcd_cultivated_mask, nlcd_closest_year = \
-            _nlcd_natural_cultivated_mask(year)
+        if nlcd_flag:
+            nlcd_natural_mask, nlcd_cultivated_mask, nlcd_closest_year = \
+                _nlcd_natural_cultivated_mask(year)
 
-        CORINE_natural_mask, CORINE_cultivated_mask, CORINE_closest_year = \
-            _CORINE_natural_cultivated_mask(year)
+        if corine_flag:
+            corine_natural_mask, corine_cultivated_mask, corine_closest_year = \
+                _corine_natural_cultivated_mask(year)
 
         for active_year, band_name_suffix in (
                 (year, ''), (year-1, PREV_YEAR_TAG)):
@@ -152,32 +169,34 @@ def _sample_pheno(pts_by_year):
             all_band_names = modis_band_names+raw_band_names
 
             # mask raw variable bands by cultivated/natural
-            nlcd_cultivated_variable_bands = local_band_stack.updateMask(
-                nlcd_cultivated_mask.eq(1))
-            nlcd_cultivated_variable_bands = \
-                nlcd_cultivated_variable_bands.rename([
-                    band_name+NLCD_CULTIVATED_FIELD
+            if nlcd_flag:
+                nlcd_cultivated_variable_bands = local_band_stack.updateMask(
+                    nlcd_cultivated_mask.eq(1))
+                nlcd_cultivated_variable_bands = \
+                    nlcd_cultivated_variable_bands.rename([
+                        band_name+NLCD_CULTIVATED_FIELD
+                        for band_name in all_band_names])
+
+                nlcd_natural_variable_bands = local_band_stack.updateMask(
+                    nlcd_natural_mask.eq(1))
+                nlcd_natural_variable_bands = nlcd_natural_variable_bands.rename([
+                    band_name+NLCD_NATURAL_FIELD
                     for band_name in all_band_names])
 
-            nlcd_natural_variable_bands = local_band_stack.updateMask(
-                nlcd_natural_mask.eq(1))
-            nlcd_natural_variable_bands = nlcd_natural_variable_bands.rename([
-                band_name+NLCD_NATURAL_FIELD
-                for band_name in all_band_names])
+            if corine_flag:
+                corine_cultivated_variable_bands = \
+                    local_band_stack.updateMask(corine_cultivated_mask.eq(1))
+                corine_cultivated_variable_bands = \
+                    corine_cultivated_variable_bands.rename([
+                        band_name+CORINE_CULTIVATED_FIELD
+                        for band_name in all_band_names])
 
-            CORINE_cultivated_variable_bands = \
-                local_band_stack.updateMask(CORINE_cultivated_mask.eq(1))
-            CORINE_cultivated_variable_bands = \
-                CORINE_cultivated_variable_bands.rename([
-                    band_name+CORINE_CULTIVATED_FIELD
-                    for band_name in all_band_names])
-
-            CORINE_natural_variable_bands = local_band_stack.updateMask(
-                CORINE_natural_mask.eq(1))
-            CORINE_natural_variable_bands = \
-                CORINE_natural_variable_bands.rename([
-                    band_name+CORINE_NATURAL_FIELD
-                    for band_name in all_band_names])
+                corine_natural_variable_bands = local_band_stack.updateMask(
+                    corine_natural_mask.eq(1))
+                corine_natural_variable_bands = \
+                    corine_natural_variable_bands.rename([
+                        band_name+CORINE_NATURAL_FIELD
+                        for band_name in all_band_names])
 
             if all_bands is None:
                 all_bands = local_band_stack
@@ -185,24 +204,25 @@ def _sample_pheno(pts_by_year):
                 all_bands = all_bands.addBands(local_band_stack)
             all_bands = all_bands.addBands(nlcd_cultivated_variable_bands)
             all_bands = all_bands.addBands(nlcd_natural_variable_bands)
-            all_bands = all_bands.addBands(CORINE_cultivated_variable_bands)
-            all_bands = all_bands.addBands(CORINE_natural_variable_bands)
+            all_bands = all_bands.addBands(corine_cultivated_variable_bands)
+            all_bands = all_bands.addBands(corine_natural_variable_bands)
 
             # mask raw variable bands by natural
 
         print('append bands')
-
-        nlcd_closest_year_image = ee.Image(
-            int(nlcd_closest_year)).rename(NLCD_CLOSEST_YEAR_FIELD)
-        CORINE_closest_year_image = ee.Image(
-            int(CORINE_closest_year)).rename(
-            CORINE_CLOSEST_YEAR_FIELD)
         all_bands = all_bands.addBands(nlcd_natural_mask)
-        all_bands = all_bands.addBands(nlcd_cultivated_mask)
-        all_bands = all_bands.addBands(nlcd_closest_year_image)
-        all_bands = all_bands.addBands(CORINE_natural_mask)
-        all_bands = all_bands.addBands(CORINE_cultivated_mask)
-        all_bands = all_bands.addBands(CORINE_closest_year_image)
+        if nlcd_flag:
+            nlcd_closest_year_image = ee.Image(
+                int(nlcd_closest_year)).rename(NLCD_CLOSEST_YEAR_FIELD)
+            all_bands = all_bands.addBands(nlcd_cultivated_mask)
+            all_bands = all_bands.addBands(nlcd_closest_year_image)
+        if corine_flag:
+            corine_closest_year_image = ee.Image(
+                int(corine_closest_year)).rename(
+                CORINE_CLOSEST_YEAR_FIELD)
+            all_bands = all_bands.addBands(corine_natural_mask)
+            all_bands = all_bands.addBands(corine_cultivated_mask)
+            all_bands = all_bands.addBands(corine_closest_year_image)
         print('reduce regions')
         samples = all_bands.reduceRegions(**{
             'collection': year_points,
@@ -243,7 +263,7 @@ def main():
                 table[args.year_field] == year].dropna().iterrows()])
 
     print('calculating pheno variables')
-    header_fields, sample_list = _sample_pheno(pts_by_year)
+    header_fields, sample_list = _sample_pheno(pts_by_year, args.nlcd, args.corine)
     print(header_fields)
     print(len(sample_list[0]))
     with open(f'sampled_{args.buffer}m_{os.path.basename(args.csv_path)}', 'w') as table_file:
