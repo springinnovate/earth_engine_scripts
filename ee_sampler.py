@@ -286,7 +286,7 @@ def main():
                 str(sample['properties'][key])
                 for key in table.columns]) + ',')
             table_file.write(','.join([
-                'None' if field not in sample['properties']
+                'invalid' if field not in sample['properties']
                 else str(sample['properties'][field])
                 for field in header_fields]) + '\n')
 
