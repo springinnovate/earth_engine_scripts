@@ -23,6 +23,9 @@ CORINE_CULTIVATED_FIELD = 'CORINE-cultivated'
 
 PREV_YEAR_TAG = '-prev-year'
 
+MODIS_DATASET_NAME = 'MODIS/006/MCD12Q2'  # 500m resolution
+VALID_MODIS_RANGE = (2001, 2019)
+
 
 def _get_closest_num(number_list, candidate):
     """Return closest number in sorted list."""
@@ -68,7 +71,6 @@ def _nlcd_natural_cultivated_mask(year):
 
 def _sample_pheno(pts_by_year, nlcd_flag, corine_flag):
     """Sample phenology variables from https://docs.google.com/spreadsheets/d/1nbmCKwIG29PF6Un3vN6mQGgFSWG_vhB6eky7wVqVwPo"""
-    DATASET_NAME = 'MODIS/006/MCD12Q2'  # 500m resolution
     # these variables are measured in days since 1-1-1970
     julian_day_variables = [
         'Greenup_1',
@@ -89,10 +91,10 @@ def _sample_pheno(pts_by_year, nlcd_flag, corine_flag):
         ]
 
     epoch_date = datetime.strptime('1970-01-01', "%Y-%m-%d")
-    modis_phen = ee.ImageCollection(DATASET_NAME)
+    modis_phen = ee.ImageCollection(MODIS_DATASET_NAME)
 
     header_fields = [
-        f'{DATASET_NAME}-{field}'
+        f'{MODIS_DATASET_NAME}-{field}'
         for field in julian_day_variables+raw_variables]
 
     header_fields_with_prev_year = [
@@ -143,34 +145,35 @@ def _sample_pheno(pts_by_year, nlcd_flag, corine_flag):
 
         for active_year, band_name_suffix in (
                 (year, ''), (year-1, PREV_YEAR_TAG)):
-            print(f'modis active_year: {active_year}')
-            current_year = datetime.strptime(
-                f'{active_year}-01-01', "%Y-%m-%d")
-            days_since_epoch = (current_year - epoch_date).days
-            modis_band_names = [
-                x+band_name_suffix
-                for x in header_fields[0:len(julian_day_variables)]]
-            bands_since_1970 = modis_phen.select(
-                julian_day_variables).filterDate(
-                f'{active_year}-01-01', f'{active_year}-12-31')
-            julian_day_bands = (
-                bands_since_1970.toBands()).subtract(days_since_epoch)
-            julian_day_bands = julian_day_bands.rename(modis_band_names)
-            raw_band_names = [
-                x+band_name_suffix
-                for x in header_fields[len(julian_day_variables)::]]
-            raw_variable_bands = modis_phen.select(
-                raw_variables).filterDate(
-                f'{active_year}-01-01', f'{active_year}-12-31').toBands()
-            raw_variable_bands = raw_variable_bands.rename(raw_band_names)
+            if VALID_MODIS_RANGE[0] <= active_year <= VALID_MODIS_RANGE[1]:
+                print(f'modis active_year: {active_year}')
+                current_year = datetime.strptime(
+                    f'{active_year}-01-01', "%Y-%m-%d")
+                days_since_epoch = (current_year - epoch_date).days
+                modis_band_names = [
+                    x+band_name_suffix
+                    for x in header_fields[0:len(julian_day_variables)]]
+                bands_since_1970 = modis_phen.select(
+                    julian_day_variables).filterDate(
+                    f'{active_year}-01-01', f'{active_year}-12-31')
+                julian_day_bands = (
+                    bands_since_1970.toBands()).subtract(days_since_epoch)
+                julian_day_bands = julian_day_bands.rename(modis_band_names)
+                raw_band_names = [
+                    x+band_name_suffix
+                    for x in header_fields[len(julian_day_variables)::]]
+                raw_variable_bands = modis_phen.select(
+                    raw_variables).filterDate(
+                    f'{active_year}-01-01', f'{active_year}-12-31').toBands()
+                raw_variable_bands = raw_variable_bands.rename(raw_band_names)
 
-            local_band_stack = julian_day_bands.addBands(raw_variable_bands)
-            all_band_names = modis_band_names+raw_band_names
+                local_band_stack = julian_day_bands.addBands(raw_variable_bands)
+                all_band_names = modis_band_names+raw_band_names
 
-            if all_bands is None:
-                all_bands = local_band_stack
-            else:
-                all_bands = all_bands.addBands(local_band_stack)
+                if all_bands is None:
+                    all_bands = local_band_stack
+                else:
+                    all_bands = all_bands.addBands(local_band_stack)
 
             # mask raw variable bands by cultivated/natural
             if nlcd_flag:
@@ -188,7 +191,11 @@ def _sample_pheno(pts_by_year, nlcd_flag, corine_flag):
                     for band_name in all_band_names])
                 nlcd_closest_year_image = ee.Image(
                     int(nlcd_closest_year)).rename(NLCD_CLOSEST_YEAR_FIELD)
-                all_bands = all_bands.addBands(nlcd_cultivated_variable_bands)
+                if all_bands is None:
+                    all_bands = nlcd_cultivated_variable_bands
+                else:
+                    all_bands = all_bands.addBands(
+                        nlcd_cultivated_variable_bands)
                 all_bands = all_bands.addBands(nlcd_natural_variable_bands)
                 all_bands = all_bands.addBands(nlcd_natural_mask)
                 all_bands = all_bands.addBands(nlcd_cultivated_mask)
@@ -211,7 +218,11 @@ def _sample_pheno(pts_by_year, nlcd_flag, corine_flag):
                 corine_closest_year_image = ee.Image(
                     int(corine_closest_year)).rename(
                     CORINE_CLOSEST_YEAR_FIELD)
-                all_bands = all_bands.addBands(corine_cultivated_variable_bands)
+                if all_bands is None:
+                    all_bands = corine_cultivated_variable_bands
+                else:
+                    all_bands = all_bands.addBands(
+                        corine_cultivated_variable_bands)
                 all_bands = all_bands.addBands(corine_natural_variable_bands)
                 all_bands = all_bands.addBands(corine_natural_mask)
                 all_bands = all_bands.addBands(corine_cultivated_mask)
@@ -266,8 +277,6 @@ def main():
 
     print('calculating pheno variables')
     header_fields, sample_list = _sample_pheno(pts_by_year, args.nlcd, args.corine)
-    #print(header_fields)
-    #print(len(sample_list[0]))
 
     with open(f'sampled_{args.buffer}m_{landcover_substring}_{os.path.basename(args.csv_path)}', 'w') as table_file:
         table_file.write(
@@ -277,7 +286,8 @@ def main():
                 str(sample['properties'][key])
                 for key in table.columns]) + ',')
             table_file.write(','.join([
-                str(sample['properties'][field])
+                'None' if field not in sample['properties']
+                else str(sample['properties'][field])
                 for field in header_fields]) + '\n')
 
 
