@@ -135,6 +135,7 @@ def _sample_pheno(pts_by_year, nlcd_flag, corine_flag):
         if nlcd_flag:
             nlcd_natural_mask, nlcd_cultivated_mask, nlcd_closest_year = \
                 _nlcd_natural_cultivated_mask(year)
+            print(f'nlcd_closest_year: {nlcd_closest_year}')
 
         if corine_flag:
             corine_natural_mask, corine_cultivated_mask, corine_closest_year = \
@@ -142,6 +143,7 @@ def _sample_pheno(pts_by_year, nlcd_flag, corine_flag):
 
         for active_year, band_name_suffix in (
                 (year, ''), (year-1, PREV_YEAR_TAG)):
+            print(f'modis active_year: {active_year}')
             current_year = datetime.strptime(
                 f'{active_year}-01-01', "%Y-%m-%d")
             days_since_epoch = (current_year - epoch_date).days
@@ -237,18 +239,22 @@ def main():
     parser.add_argument('--buffer', type=float, default=1000, help='buffer distance in meters around point to do aggregate analysis, default 1000m')
     parser.add_argument('--nlcd', default=False, action='store_true', help='use NCLD landcover for cultivated/natural masks')
     parser.add_argument('--corine', default=False, action='store_true', help='use CORINE landcover for cultivated/natural masks')
+    parser.add_argument('--authenticate', action='store_true', help='Pass this flag if you need to reauthenticate with GEE')
     args = parser.parse_args()
     if not any([args.nlcd, args.corine]):
         raise ValueError('must select at least --nlcd or --corine LULC datasets')
 
     landcover_options = [x for x in ['nlcd', 'corine'] if vars(args)[x]]
     landcover_substring = '_'.join(landcover_options)
-
+    if args.authenticate:
+        ee.Authenticate()
     ee.Initialize()
-    table = pandas.read_csv(args.csv_path)
-    print(table[args.year_field].unique())
-
-    print(f'reading points from {args.csv_path}')
+    table = pandas.read_csv(
+        args.csv_path, converters={
+            args.long_field: lambda x: float(x),
+            args.lat_field: lambda x: float(x),
+            args.year_field: lambda x: int(x),
+        })
     pts_by_year = {}
     for year in table[args.year_field].unique():
         pts_by_year[year] = ee.FeatureCollection([
@@ -260,9 +266,8 @@ def main():
 
     print('calculating pheno variables')
     header_fields, sample_list = _sample_pheno(pts_by_year, args.nlcd, args.corine)
-    print(header_fields)
-    print(len(sample_list[0]))
-
+    #print(header_fields)
+    #print(len(sample_list[0]))
 
     with open(f'sampled_{args.buffer}m_{landcover_substring}_{os.path.basename(args.csv_path)}', 'w') as table_file:
         table_file.write(
