@@ -52,6 +52,8 @@ ui.root.widgets().reset([splitPanel]);
 var panel_list = [];
 [[Map, 'left'], [linkedMap, 'right']].forEach(function(mapside, index) {
     var map = mapside[0];
+    map.style().set('cursor', 'crosshair');
+    console.log(map.style());
     var panel = ui.Panel({
       layout: ui.Panel.Layout.flow('vertical'),
       style: {
@@ -61,22 +63,27 @@ var panel_list = [];
 
     var default_control_text = mapside[1]+' controls';
     var controls_label = ui.Label(default_control_text);
-    var last_layer = null;
-    var raster = null;
+    var active_map = {
+      'last_layer': null,
+      'raster': null,
+      'point_val': null,
+      'last_point_layer': null,
+      'map': map,
+    };
     var select = ui.Select({
       items: Object.keys(datasets),
       onChange: function(key) {
           controls_label.setValue('loading .....');
           select.setDisabled(true);
-          if (last_layer !== null) {
-            map.remove(last_layer);
+          if (active_map.last_layer !== null) {
+            map.remove(active_map.last_layer);
             min_val.setDisabled(true);
             max_val.setDisabled(true);
           }
-          raster = ee.Image.loadGeoTIFF(datasets[key]);
+          active_map.raster = ee.Image.loadGeoTIFF(datasets[key]);
 
           var mean_reducer = ee.Reducer.percentile([10, 90], ['p10', 'p90']);
-          var meanDictionary = raster.reduceRegion({
+          var meanDictionary = active_map.raster.reduceRegion({
             reducer: mean_reducer,
             geometry: map.getBounds(true),
             bestEffort: true,
@@ -88,7 +95,7 @@ var panel_list = [];
               max: val['B0_p90'],
               palette: ['000000', '005aff', '43c8c8', 'fff700', 'ff0000'],
             };
-            last_layer = map.addLayer(raster, visParams);
+            active_map.last_layer = map.addLayer(active_map.raster, visParams);
             min_val.setValue(visParams.min, false);
             max_val.setValue(visParams.max, false);
             min_val.setDisabled(false);
@@ -119,11 +126,11 @@ var panel_list = [];
       });
     max_val.setDisabled(true);
 
-    var point_val = ui.Textbox('nothing clicked');
+    active_map.point_val = ui.Textbox('nothing clicked');
     function updateVisParams() {
-      if (last_layer !== null) {
-        map.remove(last_layer);
-        map.addLayer(raster, visParams);
+      if (active_map.last_layer !== null) {
+        map.remove(active_map.last_layer);
+        map.addLayer(active_map.raster, visParams);
       }
     }
 
@@ -132,7 +139,7 @@ var panel_list = [];
     var range_button = ui.Button(
       'Detect Range', function () {
         var mean_reducer = ee.Reducer.percentile([10, 90], ['p10', 'p90']);
-        var meanDictionary = last_layer.reduceRegion({
+        var meanDictionary = active_map.last_layer.reduceRegion({
           reducer: mean_reducer,
           geometry: map.getBounds(true),
           bestEffort: true,
@@ -151,31 +158,15 @@ var panel_list = [];
     panel.add(max_val);
     panel.add(range_button);
     panel.add(ui.Label('picked point'));
-    panel.add(point_val);
-    panel_list.push([panel, min_val, max_val]);
+    panel.add(active_map.point_val);
+    panel_list.push([panel, min_val, max_val, map, active_map]);
     map.add(panel);
 
     var last_point_layer = null;
 
     map.setControlVisibility(false);
     map.setControlVisibility({"mapTypeControl": true});
-    map.onClick(function (obj) {
-      var point = ee.Geometry.Point([obj.lon, obj.lat]);
-      if (last_layer !== null) {
-        var point_sample = raster.sampleRegions({
-          collection: point,
-          //scale: 10,
-          //geometries: true
-        });
-        ee.data.computeValue(point_sample, function (val) {
-          point_val.setValue(val.features[0].properties.B0.toString());
-          if (last_point_layer !== null) {
-            map.remove(last_point_layer);
-          }
-          last_point_layer = map.addLayer(point, {'color': '#00FF00'});
-        });
-      }
-    })
+
 });
 
 var clone_to_right = ui.Button(
@@ -187,6 +178,32 @@ var clone_to_left = ui.Button(
   'Use this range in both windows', function () {
       panel_list[0][1].setValue(panel_list[1][1].getValue())
       panel_list[0][2].setValue(panel_list[1][2].getValue())
+});
+
+//panel_list.push([panel, min_val, max_val, map, active_map]);
+panel_list.forEach(function (panel_array) {
+  var map = panel_array[3];
+  map.onClick(function (obj) {
+    var point = ee.Geometry.Point([obj.lon, obj.lat]);
+    [panel_list[0][4], panel_list[1][4]].forEach(function (active_map) {
+      if (active_map.last_layer !== null) {
+        active_map.point_val.setValue('sampling...')
+        var point_sample = active_map.raster.sampleRegions({
+          collection: point,
+          //scale: 10,
+          //geometries: true
+        });
+        ee.data.computeValue(point_sample, function (val) {
+          active_map.point_val.setValue(val.features[0].properties.B0.toString());
+          if (active_map.last_point_layer !== null) {
+            active_map.map.remove(active_map.last_point_layer);
+          }
+          active_map.last_point_layer = active_map.map.addLayer(
+            point, {'color': '#FF00FF'});
+        });
+      }
+    });
+  });
 });
 
 panel_list[0][0].add(clone_to_right);
