@@ -232,12 +232,16 @@ panel_list.forEach(function (panel_array) {
           //geometries: true
         });
         ee.data.computeValue(point_sample, function (val) {
-          active_map.point_val.setValue(val.features[0].properties.B0.toString());
-          if (active_map.last_point_layer !== null) {
-            active_map.map.remove(active_map.last_point_layer);
+          if (val.features.length > 0) {
+            active_map.point_val.setValue(val.features[0].properties.B0.toString());
+            if (active_map.last_point_layer !== null) {
+              active_map.map.remove(active_map.last_point_layer);
+            }
+            active_map.last_point_layer = active_map.map.addLayer(
+              point, {'color': '#FF00FF'});
+          } else {
+            active_map.point_val.setValue('nodata');
           }
-          active_map.last_point_layer = active_map.map.addLayer(
-            point, {'color': '#FF00FF'});
         });
       }
     });
