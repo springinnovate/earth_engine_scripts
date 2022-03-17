@@ -37,6 +37,19 @@ var datasets = {
     'water_ruralpop_30s_ssp3': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_water_ruralpop_30s_ssp3.tif',
     'water_ruralpop_30s_ssp5': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_water_ruralpop_30s_ssp5.tif',
 };
+
+var legend_styles = {
+  'black_to_red': ['000000', '005aff', '43c8c8', 'fff700', 'ff0000'],
+};
+var default_legend_style = 'black_to_red';
+
+function changeColorScheme(key) {
+  panel_list[0][3].visParams.legend_palette = legend_styles[key];
+  panel_list[0][3].updateVisParams();
+  panel_list[1][3].visParams.legend_palette = legend_styles[key];
+  panel_list[1][3].updateVisParams();
+};
+
 var linkedMap = ui.Map();
 Map.setCenter(0, 0, 2);
 var linker = ui.Map.Linker([ui.root.widgets().get(0), linkedMap]);
@@ -52,8 +65,31 @@ ui.root.widgets().reset([splitPanel]);
 
 var panel_list = [];
 [[Map, 'left'], [linkedMap, 'right']].forEach(function(mapside, index) {
-    var map = mapside[0];
-    map.style().set('cursor', 'crosshair');
+    var active_context = {
+      'last_layer': null,
+      'raster': null,
+      'point_val': null,
+      'last_point_layer': null,
+      'map': mapside[0],
+      'legend_panel': null,
+      'visParams': null,
+    };
+
+    active_context.map.style().set('cursor', 'crosshair');
+
+    var legend_select = ui.Select({
+      items: Object.keys(legend_styles),
+      placeholder: default_legend_style,
+      onChange: function(key, self) {
+        changeColorScheme(key);
+    }});
+
+    active_context.visParams = {
+      min: 0.0,
+      max: 100.0,
+      palette: legend_styles[default_legend_style],
+    };
+
     var panel = ui.Panel({
       layout: ui.Panel.Layout.flow('vertical'),
       style: {
@@ -69,13 +105,6 @@ var panel_list = [];
         backgroundColor: 'rgba(0, 0, 0, 0)',
       }
     });
-    var active_map = {
-      'last_layer': null,
-      'raster': null,
-      'point_val': null,
-      'last_point_layer': null,
-      'map': map,
-    };
     var select = ui.Select({
       items: Object.keys(datasets),
       onChange: function(key, self) {
@@ -83,30 +112,30 @@ var panel_list = [];
           var original_value = self.getValue();
           self.setPlaceholder('loading ...');
           self.setValue(null, false);
-          if (active_map.last_layer !== null) {
-            map.remove(active_map.last_layer);
+          if (active_context.last_layer !== null) {
+            active_context.map.remove(active_context.last_layer);
             min_val.setDisabled(true);
             max_val.setDisabled(true);
           }
-          active_map.raster = ee.Image.loadGeoTIFF(datasets[key]);
+          active_context.raster = ee.Image.loadGeoTIFF(datasets[key]);
 
           var mean_reducer = ee.Reducer.percentile([10, 90], ['p10', 'p90']);
-          var meanDictionary = active_map.raster.reduceRegion({
+          var meanDictionary = active_context.raster.reduceRegion({
             reducer: mean_reducer,
-            geometry: map.getBounds(true),
+            geometry: active_context.map.getBounds(true),
             bestEffort: true,
           });
 
           ee.data.computeValue(meanDictionary, function (val) {
-            var visParams = {
+            active_context.visParams = {
               min: val['B0_p10'],
               max: val['B0_p90'],
-              palette: ['000000', '005aff', '43c8c8', 'fff700', 'ff0000'],
+              palette: active_context.visParams.palette,
             };
-            active_map.last_layer = map.addLayer(
-              active_map.raster, visParams);
-            min_val.setValue(visParams.min, false);
-            max_val.setValue(visParams.max, false);
+            active_context.last_layer = active_context.map.addLayer(
+              active_context.raster, active_context.visParams);
+            min_val.setValue(active_context.visParams.min, false);
+            max_val.setValue(active_context.visParams.max, false);
             min_val.setDisabled(false);
             max_val.setDisabled(false);
             self.setValue(original_value, false);
@@ -115,34 +144,28 @@ var panel_list = [];
       }
     });
 
-    var palette_array = ['000000', '005aff', '43c8c8', 'fff700', 'ff0000'];
-    var visParams = {
-      min: 0.0,
-      max: 100.0,
-      palette: palette_array,
-    };
 
     var min_val = ui.Textbox(
       0, 0, function (value) {
-        visParams.min = +(value);
+        active_context.visParams.min = +(value);
         updateVisParams();
       });
     min_val.setDisabled(true);
 
     var max_val = ui.Textbox(
       100, 100, function (value) {
-        visParams.max = +(value);
+        active_context.visParams.max = +(value);
         updateVisParams();
       });
     max_val.setDisabled(true);
 
-    active_map.point_val = ui.Textbox('nothing clicked');
+    active_context.point_val = ui.Textbox('nothing clicked');
     function updateVisParams() {
-      if (active_map.last_layer !== null) {
-        active_map.last_layer.setVisParams(visParams);
+      if (active_context.last_layer !== null) {
+        active_context.last_layer.setVisParams(active_context.visParams);
       }
     }
-
+    active_context.updateVisParams = updateVisParams;
     select.setPlaceholder('Choose a dataset...');
     var range_button = ui.Button(
       'Detect Range', function (self) {
@@ -150,9 +173,9 @@ var panel_list = [];
         var base_label = self.getLabel();
         self.setLabel('Detecting...');
         var mean_reducer = ee.Reducer.percentile([10, 90], ['p10', 'p90']);
-        var meanDictionary = active_map.raster.reduceRegion({
+        var meanDictionary = active_context.raster.reduceRegion({
           reducer: mean_reducer,
-          geometry: map.getBounds(true),
+          geometry: active_context.map.getBounds(true),
           bestEffort: true,
         });
         ee.data.computeValue(meanDictionary, function (val) {
@@ -180,63 +203,71 @@ var panel_list = [];
       value: 'picked point',
       style: {'backgroundColor': 'rgba(0, 0, 0, 0)'}
     }));
-    panel.add(active_map.point_val);
-    panel_list.push([panel, min_val, max_val, map, active_map]);
-    map.add(panel);
+    panel.add(active_context.point_val);
+    panel_list.push([panel, min_val, max_val, active_context]);
+    active_context.map.add(panel);
 
-    var legend_panel = ui.Panel({
-      layout: ui.Panel.Layout.Flow('horizontal'),
-      style: {
-        position: 'top-center',
-        padding: '0px',
-        backgroundColor: 'rgba(255, 255, 255, 0.4)'
-      }
-    });
-
-    var makeRow = function(color, name) {
-      var colorBox = ui.Label({
+    function build_legend_panel() {
+      var legend_panel = ui.Panel({
+        layout: ui.Panel.Layout.Flow('horizontal'),
         style: {
-          backgroundColor: '#' + color,
-          padding: '4px 25px 4px 25px',
-          margin: '0 0 0px 0',
-          position: 'bottom-center',
-        }
-      });
-      var description = ui.Label({
-        value: name,
-        style: {
-          margin: '0 0 0px 0px',
           position: 'top-center',
-          fontSize: '10px',
-          padding: 0,
-          border: 0,
-          textAlign: 'center',
-          backgroundColor: 'rgba(0, 0, 0, 0)',
+          padding: '0px',
+          backgroundColor: 'rgba(255, 255, 255, 0.4)'
         }
       });
 
-      return ui.Panel({
-        widgets: [colorBox, description],
-        layout: ui.Panel.Layout.Flow('vertical'),
-        style: {
-          backgroundColor: 'rgba(0, 0, 0, 0)',
-        }
-      });
+      var makeRow = function(color, name) {
+        var colorBox = ui.Label({
+          style: {
+            backgroundColor: '#' + color,
+            padding: '4px 25px 4px 25px',
+            margin: '0 0 0px 0',
+            position: 'bottom-center',
+          }
+        });
+        var description = ui.Label({
+          value: name,
+          style: {
+            margin: '0 0 0px 0px',
+            position: 'top-center',
+            fontSize: '10px',
+            padding: 0,
+            border: 0,
+            textAlign: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0)',
+          }
+        });
+
+        return ui.Panel({
+          widgets: [colorBox, description],
+          layout: ui.Panel.Layout.Flow('vertical'),
+          style: {
+            backgroundColor: 'rgba(0, 0, 0, 0)',
+          }
+        });
+      };
+
+      function changeColorScheme(key) {
+
+      };
+
+      var names = ['Low', '', '', '', 'High'];
+      legend_panel.add(legend_select);
+
+      // Add color and and names
+      for (var i = 0; i<5; i++) {
+        legend_panel.add(makeRow(active_context.visParams.palette[i], names[i]));
+      }
+      if (active_context.legend_panel !== null) {
+        active_context.remove(active_context.legend_panel);
+      }
+      active_context.legend_panel = active_context.map.add(legend_panel);
     };
 
-    var names = ['Low', '', '', '', 'High'];
-
-    // Add color and and names
-    for (var i = 0; i<5; i++) {
-      legend_panel.add(makeRow(palette_array[i], names[i]));
-      }
-    map.add(legend_panel);
-
-    var last_point_layer = null;
-
-    map.setControlVisibility(false);
-    map.setControlVisibility({"mapTypeControl": true});
-
+    active_context.map.setControlVisibility(false);
+    active_context.map.setControlVisibility({"mapTypeControl": true});
+    build_legend_panel();
 });
 
 var clone_to_right = ui.Button(
@@ -250,29 +281,29 @@ var clone_to_left = ui.Button(
       panel_list[0][2].setValue(panel_list[1][2].getValue(), true)
 });
 
-//panel_list.push([panel, min_val, max_val, map, active_map]);
+//panel_list.push([panel, min_val, max_val, map, active_context]);
 panel_list.forEach(function (panel_array) {
-  var map = panel_array[3];
+  var map = panel_array[3].map;
   map.onClick(function (obj) {
     var point = ee.Geometry.Point([obj.lon, obj.lat]);
-    [panel_list[0][4], panel_list[1][4]].forEach(function (active_map) {
-      if (active_map.last_layer !== null) {
-        active_map.point_val.setValue('sampling...')
-        var point_sample = active_map.raster.sampleRegions({
+    [panel_list[0][3], panel_list[1][3]].forEach(function (active_context) {
+      if (active_context.last_layer !== null) {
+        active_context.point_val.setValue('sampling...')
+        var point_sample = active_context.raster.sampleRegions({
           collection: point,
           //scale: 10,
           //geometries: true
         });
         ee.data.computeValue(point_sample, function (val) {
           if (val.features.length > 0) {
-            active_map.point_val.setValue(val.features[0].properties.B0.toString());
-            if (active_map.last_point_layer !== null) {
-              active_map.map.remove(active_map.last_point_layer);
+            active_context.point_val.setValue(val.features[0].properties.B0.toString());
+            if (active_context.last_point_layer !== null) {
+              active_context.map.remove(active_context.last_point_layer);
             }
-            active_map.last_point_layer = active_map.map.addLayer(
+            active_context.last_point_layer = active_context.map.addLayer(
               point, {'color': '#FF00FF'});
           } else {
-            active_map.point_val.setValue('nodata');
+            active_context.point_val.setValue('nodata');
           }
         });
       }
