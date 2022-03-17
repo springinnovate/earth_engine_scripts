@@ -187,7 +187,7 @@ var panel_list = [];
     var legend_panel = ui.Panel({
       layout: ui.Panel.Layout.Flow('horizontal'),
       style: {
-        position: 'bottom-center',
+        position: 'top-center',
         padding: '0px',
         backgroundColor: 'rgba(0, 0, 0, 0)'
       }
