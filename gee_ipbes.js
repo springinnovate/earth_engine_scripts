@@ -146,8 +146,8 @@ var panel_list = [];
           bestEffort: true,
         });
         ee.data.computeValue(meanDictionary, function (val) {
-          min_val.setValue(val['B0_p10']);
-          max_val.setValue(val['B0_p90']);
+          min_val.setValue(val['B0_p10'], false);
+          max_val.setValue(val['B0_p90'], true);
         });
       });
 
@@ -210,13 +210,13 @@ var panel_list = [];
 
 var clone_to_right = ui.Button(
   'Use this range in both windows', function () {
-      panel_list[1][1].setValue(panel_list[0][1].getValue())
-      panel_list[1][2].setValue(panel_list[0][2].getValue())
+      panel_list[1][1].setValue(panel_list[0][1].getValue(), false)
+      panel_list[1][2].setValue(panel_list[0][2].getValue(), true)
 });
 var clone_to_left = ui.Button(
   'Use this range in both windows', function () {
-      panel_list[0][1].setValue(panel_list[1][1].getValue())
-      panel_list[0][2].setValue(panel_list[1][2].getValue())
+      panel_list[0][1].setValue(panel_list[1][1].getValue(), false)
+      panel_list[0][2].setValue(panel_list[1][2].getValue(), true)
 });
 
 //panel_list.push([panel, min_val, max_val, map, active_map]);
