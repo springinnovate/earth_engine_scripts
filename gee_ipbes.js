@@ -181,7 +181,7 @@ var panel_list = [];
       var colorBox = ui.Label({
         style: {
           backgroundColor: '#' + color,
-          padding: '8px 38px 8px 38px',
+          padding: '4px 25px 4px 25px',
           margin: '0 0 0px 0',
           position: 'bottom-center',
         }
@@ -190,7 +190,9 @@ var panel_list = [];
         value: name,
         style: {
           margin: '0 0 0px 0px',
-          position: 'top-center',}
+          position: 'top-center',
+          font-size: '8px',
+        }
       });
 
       return ui.Panel({
@@ -199,7 +201,7 @@ var panel_list = [];
       });
     };
 
-    var names = ['Low', 'Med-Low', 'Med', 'Med-High', 'High'];
+    var names = ['Low', '', '', '', 'High'];
 
     // Add color and and names
     for (var i = 0; i<5; i++) {
