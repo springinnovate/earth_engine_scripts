@@ -72,9 +72,11 @@ var panel_list = [];
     };
     var select = ui.Select({
       items: Object.keys(datasets),
-      onChange: function(key) {
-          controls_label.setValue('loading .....');
-          select.setDisabled(true);
+      onChange: function(key, self) {
+          self.setDisabled(true);
+          var original_value = self.getValue();
+          self.setPlaceholder('loading ...');
+          self.setValue(null, false);
           if (active_map.last_layer !== null) {
             map.remove(active_map.last_layer);
             min_val.setDisabled(true);
@@ -101,8 +103,8 @@ var panel_list = [];
             max_val.setValue(visParams.max, false);
             min_val.setDisabled(false);
             max_val.setDisabled(false);
-            controls_label.setValue(default_control_text);
-            select.setDisabled(false);
+            self.setValue(original_value, false);
+            self.setDisabled(false);
           });
       }
     });
