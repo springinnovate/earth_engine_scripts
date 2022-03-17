@@ -150,8 +150,8 @@ var panel_list = [];
         ee.data.computeValue(meanDictionary, function (val) {
           min_val.setValue(val['B0_p10'], false);
           max_val.setValue(val['B0_p90'], true);
-          self.setDisabled(true);
           self.setLabel(base_label)
+          self.setDisabled(false);
         });
       });
 
