@@ -95,7 +95,8 @@ var panel_list = [];
               max: val['B0_p90'],
               palette: ['000000', '005aff', '43c8c8', 'fff700', 'ff0000'],
             };
-            active_map.last_layer = map.addLayer(active_map.raster, visParams);
+            active_map.last_layer = map.addLayer(
+              active_map.raster, visParams);
             min_val.setValue(visParams.min, false);
             max_val.setValue(visParams.max, false);
             min_val.setDisabled(false);
@@ -130,8 +131,7 @@ var panel_list = [];
     active_map.point_val = ui.Textbox('nothing clicked');
     function updateVisParams() {
       if (active_map.last_layer !== null) {
-        map.remove(active_map.last_layer);
-        active_map.last_layer = map.addLayer(active_map.raster, visParams);
+        active_map.last_layer.setVisParams(visParams);
       }
     }
 
