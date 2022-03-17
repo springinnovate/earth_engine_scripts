@@ -191,13 +191,20 @@ var panel_list = [];
         style: {
           margin: '0 0 0px 0px',
           position: 'top-center',
-          font-size: '8px',
+          fontSize: '10px',
+          padding: 0,
+          border: 0,
+          textAlign: 'center',
+          backgroundColor: 'rgba(0, 100, 200, 0)',
         }
       });
 
       return ui.Panel({
         widgets: [colorBox, description],
-        layout: ui.Panel.Layout.Flow('vertical')
+        layout: ui.Panel.Layout.Flow('vertical'),
+        style: {
+          backgroundColor: 'rgba(0, 100, 200, 0.5)',
+        }
       });
     };
 
