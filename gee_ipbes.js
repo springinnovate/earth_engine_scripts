@@ -38,6 +38,7 @@ var datasets = {
     'water_ruralpop_30s_ssp5': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_water_ruralpop_30s_ssp5.tif',
 };
 var linkedMap = ui.Map();
+Map.setCenter(0, 0, 2);
 var linker = ui.Map.Linker([ui.root.widgets().get(0), linkedMap]);
 // Create a SplitPanel which holds the linked maps side-by-side.
 var splitPanel = ui.SplitPanel({
