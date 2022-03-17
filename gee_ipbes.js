@@ -136,9 +136,11 @@ var panel_list = [];
     }
 
     select.setPlaceholder('Choose a dataset...');
-
     var range_button = ui.Button(
-      'Detect Range', function () {
+      'Detect Range', function (self) {
+        self.setDisabled(true);
+        var base_label = self.getLabel();
+        self.setLabel('Detecting...');
         var mean_reducer = ee.Reducer.percentile([10, 90], ['p10', 'p90']);
         var meanDictionary = active_map.raster.reduceRegion({
           reducer: mean_reducer,
@@ -148,6 +150,8 @@ var panel_list = [];
         ee.data.computeValue(meanDictionary, function (val) {
           min_val.setValue(val['B0_p10'], false);
           max_val.setValue(val['B0_p90'], true);
+          self.setDisabled(true);
+          self.setLabel(base_label)
         });
       });
 
