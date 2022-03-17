@@ -174,6 +174,7 @@ var panel_list = [];
       style: {
         position: 'bottom-center',
         padding: '0px',
+        backgroundColor: 'rgba(50, 50, 50, 0.1)'
       }
     });
 
@@ -195,7 +196,7 @@ var panel_list = [];
           padding: 0,
           border: 0,
           textAlign: 'center',
-          backgroundColor: 'rgba(0, 100, 200, 0)',
+          backgroundColor: 'rgba(0, 0, 0, 0)',
         }
       });
 
@@ -203,7 +204,7 @@ var panel_list = [];
         widgets: [colorBox, description],
         layout: ui.Panel.Layout.Flow('vertical'),
         style: {
-          backgroundColor: 'rgba(0, 100, 200, 0.5)',
+          backgroundColor: 'rgba(0, 0, 0, 0)',
         }
       });
     };
