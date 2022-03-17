@@ -62,20 +62,21 @@ var panel_list = [];
     var default_control_text = mapside[1]+' controls';
     var controls_label = ui.Label(default_control_text);
     var last_layer = null;
+    var raster = null;
     var select = ui.Select({
       items: Object.keys(datasets),
       onChange: function(key) {
           controls_label.setValue('loading .....');
           select.setDisabled(true);
           if (last_layer !== null) {
-            map.remove(map.layers().get(0));
+            map.remove(last_layer);
             min_val.setDisabled(true);
             max_val.setDisabled(true);
           }
-          var layer = ee.Image.loadGeoTIFF(datasets[key]);
+          raster = ee.Image.loadGeoTIFF(datasets[key]);
 
           var mean_reducer = ee.Reducer.percentile([10, 90], ['p10', 'p90']);
-          var meanDictionary = layer.reduceRegion({
+          var meanDictionary = raster.reduceRegion({
             reducer: mean_reducer,
             geometry: map.getBounds(true),
             bestEffort: true,
@@ -87,8 +88,7 @@ var panel_list = [];
               max: val['B0_p90'],
               palette: ['000000', '005aff', '43c8c8', 'fff700', 'ff0000'],
             };
-            map.addLayer(layer, visParams);
-            last_layer = layer;
+            last_layer = map.addLayer(raster, visParams);
             min_val.setValue(visParams.min, false);
             max_val.setValue(visParams.max, false);
             min_val.setDisabled(false);
@@ -122,8 +122,8 @@ var panel_list = [];
     var point_val = ui.Textbox('nothing clicked');
     function updateVisParams() {
       if (last_layer !== null) {
-        map.remove(map.layers().get(0));
-        map.addLayer(last_layer, visParams);
+        map.remove(last_layer);
+        map.addLayer(raster, visParams);
       }
     }
 
@@ -162,7 +162,7 @@ var panel_list = [];
     map.onClick(function (obj) {
       var point = ee.Geometry.Point([obj.lon, obj.lat]);
       if (last_layer !== null) {
-        var point_sample = last_layer.sampleRegions({
+        var point_sample = raster.sampleRegions({
           collection: point,
           //scale: 10,
           //geometries: true
@@ -175,10 +175,6 @@ var panel_list = [];
           last_point_layer = map.addLayer(point, {'color': '#00FF00'});
         });
       }
-
-      console.log(obj.lat);
-      console.log(obj.lon);
-      console.log(point_sample);
     })
 });
 
