@@ -57,12 +57,18 @@ var panel_list = [];
     var panel = ui.Panel({
       layout: ui.Panel.Layout.flow('vertical'),
       style: {
-        'position': "middle-"+mapside[1]
+        'position': "middle-"+mapside[1],
+        'backgroundColor': 'rgba(255, 255, 255, 0.4)'
       }
     });
 
     var default_control_text = mapside[1]+' controls';
-    var controls_label = ui.Label(default_control_text);
+    var controls_label = ui.Label({
+      value: default_control_text,
+      style: {
+        backgroundColor: 'rgba(0, 0, 0, 0)',
+      }
+    });
     var active_map = {
       'last_layer': null,
       'raster': null,
@@ -159,12 +165,21 @@ var panel_list = [];
 
     panel.add(controls_label);
     panel.add(select);
-    panel.add(ui.Label('min'));
+    panel.add(ui.Label({
+        value: 'min',
+        style:{'backgroundColor': 'rgba(0, 0, 0, 0)'}
+      }));
     panel.add(min_val);
-    panel.add(ui.Label('max'));
+    panel.add(ui.Label({
+        value: 'max',
+        style:{'backgroundColor': 'rgba(0, 0, 0, 0)'}
+      }));
     panel.add(max_val);
     panel.add(range_button);
-    panel.add(ui.Label('picked point'));
+    panel.add(ui.Label({
+      value: 'picked point',
+      style: {'backgroundColor': 'rgba(0, 0, 0, 0)'}
+    }));
     panel.add(active_map.point_val);
     panel_list.push([panel, min_val, max_val, map, active_map]);
     map.add(panel);
@@ -174,7 +189,7 @@ var panel_list = [];
       style: {
         position: 'bottom-center',
         padding: '0px',
-        backgroundColor: 'rgba(50, 50, 50, 0.1)'
+        backgroundColor: 'rgba(0, 0, 0, 0)'
       }
     });
 
