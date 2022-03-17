@@ -1,29 +1,27 @@
 var datasets = {
-    'coastal_pop_30s_cur': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_coastal_pop_30s_cur.tif',
-    'coastal_pop_30s_ssp1': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_coastal_pop_30s_ssp1.tif',
-    'coastal_pop_30s_ssp3': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_coastal_pop_30s_ssp3.tif',
-    'coastal_pop_30s_ssp5': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_coastal_pop_30s_ssp5.tif',
-    'nutrient_deficit_10s_cur_compressed': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_deficit_10s_cur_compressed.tif',
+    'downstream_bene_2017_50000': 'gs://ecoshard-root/cog/cog_downstream_bene_2017_50000.tif',
+    'downstream_bene_2017_500000': 'gs://ecoshard-root/cog/cog_downstream_bene_2017_500000.tif',
+    'nutrient_deficit_10s_cur': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_deficit_10s_cur_compressed.tif',
     'nutrient_deficit_10s_ssp1': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_deficit_10s_ssp1.tif',
     'nutrient_deficit_10s_ssp3': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_deficit_10s_ssp3.tif',
     'nutrient_deficit_10s_ssp5': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_deficit_10s_ssp5.tif',
-    'nutrient_deficit_change_10s_ssp1_compressed': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_deficit_change_10s_ssp1_compressed.tif',
-    'nutrient_deficit_change_10s_ssp3_compressed': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_deficit_change_10s_ssp3_compressed.tif',
-    'nutrient_deficit_change_10s_ssp5_compressed': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_deficit_change_10s_ssp5_compressed.tif',
-    'nutrient_pop_30s_cur_compressed': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_pop_30s_cur_compressed.tif',
+    'nutrient_deficit_change_10s_ssp1': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_deficit_change_10s_ssp1_compressed.tif',
+    'nutrient_deficit_change_10s_ssp3': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_deficit_change_10s_ssp3_compressed.tif',
+    'nutrient_deficit_change_10s_ssp5': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_deficit_change_10s_ssp5_compressed.tif',
+    'nutrient_pop_30s_cur': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_pop_30s_cur_compressed.tif',
     'nutrient_pop_30s_ssp3': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_pop_30s_ssp3.tif',
     'nutrient_pop_30s_ssp5': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_pop_30s_ssp5.tif',
-    'nutrient_pop_change_10s_ssp_compressed': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_pop_change_10s_ssp_compressed.tif',
-    'nutrient_pop_change_30s_ssp1_compressed': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_pop_change_30s_ssp1_compressed.tif',
-    'nutrient_pop_change_30s_ssp3_compressed': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_pop_change_30s_ssp3_compressed.tif',
-    'nutrient_pop_change_30s_ssp5_compressed': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_pop_change_30s_ssp5_compressed.tif',
-    'pollination_deficit_10s_cur_compressed': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_deficit_10s_cur_compressed.tif',
+    'nutrient_pop_change_10s_ssp': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_pop_change_10s_ssp_compressed.tif',
+    'nutrient_pop_change_30s_ssp1': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_pop_change_30s_ssp1_compressed.tif',
+    'nutrient_pop_change_30s_ssp3': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_pop_change_30s_ssp3_compressed.tif',
+    'nutrient_pop_change_30s_ssp5': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_pop_change_30s_ssp5_compressed.tif',
+    'pollination_deficit_10s_cur': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_deficit_10s_cur_compressed.tif',
     'pollination_deficit_10s_ssp1': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_deficit_10s_ssp1.tif',
     'pollination_deficit_10s_ssp3': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_deficit_10s_ssp3.tif',
     'pollination_deficit_10s_ssp5': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_deficit_10s_ssp5.tif',
-    'pollination_deficit_change_10s_ssp1_compressed': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_deficit_change_10s_ssp1_compressed.tif',
-    'pollination_deficit_change_10s_ssp3_compressed': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_deficit_change_10s_ssp3_compressed.tif',
-    'pollination_deficit_change_10s_ssp5_compressed': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_deficit_change_10s_ssp5_compressed.tif',
+    'pollination_deficit_change_10s_ssp1': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_deficit_change_10s_ssp1_compressed.tif',
+    'pollination_deficit_change_10s_ssp3': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_deficit_change_10s_ssp3_compressed.tif',
+    'pollination_deficit_change_10s_ssp5': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_deficit_change_10s_ssp5_compressed.tif',
     'pollination_pop_30s_cur': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_pop_30s_cur.tif',
     'pollination_pop_30s_ssp1': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_pop_30s_ssp1.tif',
     'pollination_pop_30s_ssp3': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_pop_30s_ssp3.tif',
@@ -58,8 +56,8 @@ var panel_list = [];
     var panel = ui.Panel({
       layout: ui.Panel.Layout.flow('vertical'),
       style: {
-        'position': 'top-'+mapside[1],
-        width: '300px'}
+        'position': "middle-"+mapside[1]
+      }
     });
 
     var last_layer = null;
@@ -101,7 +99,7 @@ var panel_list = [];
       }
     }
 
-    select.setPlaceholder('Choose a location...');
+    select.setPlaceholder('Choose a dataset...');
 
     var range_button = ui.Button(
       'Detect Range', function () {
@@ -127,8 +125,8 @@ var panel_list = [];
     panel_list.push([panel, min_val, max_val]);
     map.add(panel);
 
-    map.setControlVisibility(
-      {"zoomControl": false});
+    map.setControlVisibility(false);
+    map.setControlVisibility({"mapTypeControl": true});
 
 });
 
@@ -145,4 +143,3 @@ var clone_to_left = ui.Button(
 
 panel_list[0][0].add(clone_to_right);
 panel_list[1][0].add(clone_to_left);
-
