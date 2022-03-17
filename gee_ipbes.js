@@ -189,7 +189,7 @@ var panel_list = [];
       style: {
         position: 'top-center',
         padding: '0px',
-        backgroundColor: 'rgba(0, 0, 0, 0)'
+        backgroundColor: 'rgba(255, 255, 255, 0.4)'
       }
     });
 
