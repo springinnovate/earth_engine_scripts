@@ -105,10 +105,11 @@ var panel_list = [];
       }
     });
 
+    var palette_array = ['000000', '005aff', '43c8c8', 'fff700', 'ff0000'];
     var visParams = {
       min: 0.0,
       max: 100.0,
-      palette: ['000000', '005aff', '43c8c8', 'fff700', 'ff0000'],
+      palette: palette_array,
     };
 
     var min_val = ui.Textbox(
@@ -129,7 +130,7 @@ var panel_list = [];
     function updateVisParams() {
       if (active_map.last_layer !== null) {
         map.remove(active_map.last_layer);
-        map.addLayer(active_map.raster, visParams);
+        active_map.last_layer = map.addLayer(active_map.raster, visParams);
       }
     }
 
@@ -160,6 +161,44 @@ var panel_list = [];
     panel.add(active_map.point_val);
     panel_list.push([panel, min_val, max_val, map, active_map]);
     map.add(panel);
+
+    var legend_panel = ui.Panel({
+      layout: ui.Panel.Layout.Flow('horizontal'),
+      style: {
+        position: 'bottom-center',
+        padding: '0px',
+      }
+    });
+
+    var makeRow = function(color, name) {
+      var colorBox = ui.Label({
+        style: {
+          backgroundColor: '#' + color,
+          padding: '8px 38px 8px 38px',
+          margin: '0 0 0px 0',
+          position: 'bottom-center',
+        }
+      });
+      var description = ui.Label({
+        value: name,
+        style: {
+          margin: '0 0 0px 0px',
+          position: 'top-center',}
+      });
+
+      return ui.Panel({
+        widgets: [colorBox, description],
+        layout: ui.Panel.Layout.Flow('vertical')
+      });
+    };
+
+    var names = ['Low', 'Med-Low', 'Med', 'Med-High', 'High'];
+
+    // Add color and and names
+    for (var i = 0; i<5; i++) {
+      legend_panel.add(makeRow(palette_array[i], names[i]));
+      }
+    map.add(legend_panel);
 
     var last_point_layer = null;
 
