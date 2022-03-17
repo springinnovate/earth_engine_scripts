@@ -53,7 +53,6 @@ var panel_list = [];
 [[Map, 'left'], [linkedMap, 'right']].forEach(function(mapside, index) {
     var map = mapside[0];
     map.style().set('cursor', 'crosshair');
-    console.log(map.style());
     var panel = ui.Panel({
       layout: ui.Panel.Layout.flow('vertical'),
       style: {
@@ -139,7 +138,7 @@ var panel_list = [];
     var range_button = ui.Button(
       'Detect Range', function () {
         var mean_reducer = ee.Reducer.percentile([10, 90], ['p10', 'p90']);
-        var meanDictionary = active_map.last_layer.reduceRegion({
+        var meanDictionary = active_map.raster.reduceRegion({
           reducer: mean_reducer,
           geometry: map.getBounds(true),
           bestEffort: true,
