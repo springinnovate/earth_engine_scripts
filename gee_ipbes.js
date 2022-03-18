@@ -49,15 +49,10 @@ var legend_styles = {
 };
 var default_legend_style = 'blue_to_green';
 
-function changeColorScheme(key) {
-  panel_list[0][3].visParams.palette = legend_styles[key];
-  panel_list[0][3].build_legend_panel();
-  panel_list[0][3].updateVisParams();
-  panel_list[0][3].legend_select.setValue(key, false);
-  panel_list[1][3].visParams.palette = legend_styles[key];
-  panel_list[1][3].build_legend_panel();
-  panel_list[1][3].updateVisParams();
-  panel_list[1][3].legend_select.setValue(key, false);
+function changeColorScheme(key, active_context) {
+  active_context.visParams.palette = legend_styles[key];
+  active_context.build_legend_panel();
+  active_context.updateVisParams();
 };
 
 var linkedMap = ui.Map();
@@ -257,7 +252,7 @@ var panel_list = [];
           items: Object.keys(legend_styles),
           placeholder: default_legend_style,
           onChange: function(key, self) {
-            changeColorScheme(key);
+            changeColorScheme(key, active_context);
         }});
         active_context.map.add(active_context.legend_panel);
       }
