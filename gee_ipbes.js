@@ -1,4 +1,5 @@
 var datasets = {
+    '(*clear*)': '',
     'downstream_bene_2017_50000': 'gs://ecoshard-root/cog/cog_downstream_bene_2017_50000.tif',
     'downstream_bene_2017_500000': 'gs://ecoshard-root/cog/cog_downstream_bene_2017_500000.tif',
     'nutrient_deficit_10s_cur': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_nutrient_deficit_10s_cur_compressed.tif',
@@ -29,6 +30,7 @@ var datasets = {
     'pollination_pop_change_30s_ssp1': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_pop_change_30s_ssp1.tif',
     'pollination_pop_change_30s_ssp3': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_pop_change_30s_ssp3.tif',
     'pollination_pop_change_30s_ssp5': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pollination_pop_change_30s_ssp5.tif',
+    'pollination_potential_10s_cur': 'gs://ecoshard-root/cog/cog_pollination_potential_10s_cur_md5_8e68c6.tif',
     'pop_change_nutrient_30s_ssp1': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pop_change_nutrient_30s_ssp1.tif',
     'pop_change_nutrient_30s_ssp3': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pop_change_nutrient_30s_ssp3.tif',
     'pop_change_nutrient_30s_ssp5': 'gs://ipbes-natcap-ecoshard-data-for-publication/cog/cog_pop_change_nutrient_30s_ssp5.tif',
@@ -113,6 +115,11 @@ var panel_list = [];
             active_context.map.remove(active_context.last_layer);
             min_val.setDisabled(true);
             max_val.setDisabled(true);
+          }
+          if (datasets[key] == '') {
+            self.setValue(original_value, false);
+            self.setDisabled(false);
+            return
           }
           active_context.raster = ee.Image.loadGeoTIFF(datasets[key]);
 
