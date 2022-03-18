@@ -40,14 +40,19 @@ var datasets = {
 
 var legend_styles = {
   'black_to_red': ['000000', '005aff', '43c8c8', 'fff700', 'ff0000'],
+  'red_to_green': ['ff0000', 'aa3300', '888800', '33aa00', '00ff00'],
 };
 var default_legend_style = 'black_to_red';
 
 function changeColorScheme(key) {
-  panel_list[0][3].visParams.legend_palette = legend_styles[key];
+  panel_list[0][3].visParams.palette = legend_styles[key];
+  panel_list[0][3].build_legend_panel();
   panel_list[0][3].updateVisParams();
-  panel_list[1][3].visParams.legend_palette = legend_styles[key];
+  panel_list[0][3].legend_select.setValue(key, false);
+  panel_list[1][3].visParams.palette = legend_styles[key];
+  panel_list[1][3].build_legend_panel();
   panel_list[1][3].updateVisParams();
+  panel_list[1][3].legend_select.setValue(key, false);
 };
 
 var linkedMap = ui.Map();
@@ -76,14 +81,6 @@ var panel_list = [];
     };
 
     active_context.map.style().set('cursor', 'crosshair');
-
-    var legend_select = ui.Select({
-      items: Object.keys(legend_styles),
-      placeholder: default_legend_style,
-      onChange: function(key, self) {
-        changeColorScheme(key);
-    }});
-
     active_context.visParams = {
       min: 0.0,
       max: 100.0,
@@ -208,15 +205,6 @@ var panel_list = [];
     active_context.map.add(panel);
 
     function build_legend_panel() {
-      var legend_panel = ui.Panel({
-        layout: ui.Panel.Layout.Flow('horizontal'),
-        style: {
-          position: 'top-center',
-          padding: '0px',
-          backgroundColor: 'rgba(255, 255, 255, 0.4)'
-        }
-      });
-
       var makeRow = function(color, name) {
         var colorBox = ui.Label({
           style: {
@@ -248,26 +236,38 @@ var panel_list = [];
         });
       };
 
-      function changeColorScheme(key) {
-
-      };
-
       var names = ['Low', '', '', '', 'High'];
-      legend_panel.add(legend_select);
-
+      if (active_context.legend_panel !== null) {
+        active_context.legend_panel.clear();
+      } else {
+        active_context.legend_panel = ui.Panel({
+          layout: ui.Panel.Layout.Flow('horizontal'),
+          style: {
+            position: 'top-center',
+            padding: '0px',
+            backgroundColor: 'rgba(255, 255, 255, 0.4)'
+          }
+        });
+        active_context.legend_select = ui.Select({
+          items: Object.keys(legend_styles),
+          placeholder: default_legend_style,
+          onChange: function(key, self) {
+            changeColorScheme(key);
+        }});
+        active_context.map.add(active_context.legend_panel);
+      }
+      active_context.legend_panel.add(active_context.legend_select);
       // Add color and and names
       for (var i = 0; i<5; i++) {
-        legend_panel.add(makeRow(active_context.visParams.palette[i], names[i]));
+        var row = makeRow(active_context.visParams.palette[i], names[i]);
+        active_context.legend_panel.add(row);
       }
-      if (active_context.legend_panel !== null) {
-        active_context.remove(active_context.legend_panel);
-      }
-      active_context.legend_panel = active_context.map.add(legend_panel);
-    };
+    }
 
     active_context.map.setControlVisibility(false);
     active_context.map.setControlVisibility({"mapTypeControl": true});
     build_legend_panel();
+    active_context.build_legend_panel = build_legend_panel;
 });
 
 var clone_to_right = ui.Button(
