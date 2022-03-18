@@ -40,9 +40,14 @@ var datasets = {
 
 var legend_styles = {
   'black_to_red': ['000000', '005aff', '43c8c8', 'fff700', 'ff0000'],
-  'red_to_green': ['ff0000', 'aa3300', '888800', '33aa00', '00ff00'],
+  'blue_to_green': ['440154', '414287', '218e8d', '5ac864', 'fde725'],
+  'cividis': ['00204d', '414d6b', '7c7b78', 'b9ac70', 'ffea46'],
+  'viridis': ['440154', '355e8d', '20928c', '70cf57', 'fde725'],
+  'blues': ['f7fbff', 'c6dbef', '6baed6', '2171b5', '08306b'],
+  'reds': ['fff5f0', 'fcbba1', 'fb6a4a', 'cb181d', '67000d'],
+  'turbo': ['321543', '2eb4f2', 'affa37', 'f66c19', '7a0403'],
 };
-var default_legend_style = 'black_to_red';
+var default_legend_style = 'blue_to_green';
 
 function changeColorScheme(key) {
   panel_list[0][3].visParams.palette = legend_styles[key];
