@@ -1,4 +1,4 @@
-"""EE tracer code."""
+"""Sample GEE datasets given pest control CSV."""
 from datetime import datetime
 import argparse
 import os
