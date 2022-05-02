@@ -250,6 +250,11 @@ def main():
     parser.add_argument('--buffer', type=float, default=1000, help='buffer distance in meters around point to do aggregate analysis, default 1000m')
     parser.add_argument('--nlcd', default=False, action='store_true', help='use NCLD landcover for cultivated/natural masks')
     parser.add_argument('--corine', default=False, action='store_true', help='use CORINE landcover for cultivated/natural masks')
+    parser.add_argument('--polygon_path', type=str, help='path to local polygon to sample')
+
+    # 2) the natural habitat eo characteristics in and out of polygon
+    # 3) proportion of area outside of polygon
+
     parser.add_argument('--authenticate', action='store_true', help='Pass this flag if you need to reauthenticate with GEE')
     args = parser.parse_args()
     if not any([args.nlcd, args.corine]):
