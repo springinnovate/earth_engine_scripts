@@ -4,12 +4,7 @@ import argparse
 import os
 import json
 
-from osgeo import gdal
-from osgeo import ogr
-from osgeo import osr
 import geopandas
-import shapely.ops
-import shapely.wkt
 import ee
 import numpy
 import pandas
@@ -28,6 +23,9 @@ CORINE_VALID_YEARS = numpy.array([1990, 2000, 2006, 2012, 2018])
 CORINE_CLOSEST_YEAR_FIELD = 'CORINE-year'
 CORINE_NATURAL_FIELD = 'CORINE-natural'
 CORINE_CULTIVATED_FIELD = 'CORINE-cultivated'
+
+POLY_IN_FIELD = 'POLY-in'
+POLY_OUT_FIELD = 'POLY-out'
 
 PREV_YEAR_TAG = '-prev-year'
 
@@ -77,8 +75,20 @@ def _nlcd_natural_cultivated_mask(year):
     return natural_mask, cultivated_mask, closest_year
 
 
-def _sample_pheno(pts_by_year, nlcd_flag, corine_flag):
-    """Sample phenology variables from https://docs.google.com/spreadsheets/d/1nbmCKwIG29PF6Un3vN6mQGgFSWG_vhB6eky7wVqVwPo"""
+def _sample_pheno(pts_by_year, nlcd_flag, corine_flag, ee_poly):
+    """Sample phenology variables from https://docs.google.com/spreadsheets/d/1nbmCKwIG29PF6Un3vN6mQGgFSWG_vhB6eky7wVqVwPo
+
+    Args:
+        pts_by_year:
+        nlcd_flag (bool): if True, sample the NLCD dataset
+        corine_flag (bool): if True, sample the CORINE dataset
+        ee_poly (ee.Polygon): if not None, additionally filter samples on the
+            nlcd/corine datasets to see what's in or out.
+
+    Returns:
+        header_fields (list):
+
+    """
     # these variables are measured in days since 1-1-1970
     julian_day_variables = [
         'Greenup_1',
@@ -135,6 +145,10 @@ def _sample_pheno(pts_by_year, nlcd_flag, corine_flag):
         header_fields_with_prev_year.append(CORINE_NATURAL_FIELD)
         header_fields_with_prev_year.append(CORINE_CULTIVATED_FIELD)
         header_fields_with_prev_year.append(CORINE_CLOSEST_YEAR_FIELD)
+
+    if ee_poly:
+        header_fields_with_prev_year.append(POLY_IN_FIELD)
+        header_fields_with_prev_year.append(POLY_OUT_FIELD)
 
     sample_list = []
     for year in pts_by_year.keys():
@@ -236,14 +250,25 @@ def _sample_pheno(pts_by_year, nlcd_flag, corine_flag):
                 all_bands = all_bands.addBands(corine_cultivated_mask)
                 all_bands = all_bands.addBands(corine_closest_year_image)
 
-            # mask raw variable bands by natural
-
         print('reduce regions')
         samples = all_bands.reduceRegions(**{
             'collection': year_points,
             'reducer': REDUCER}).getInfo()
         sample_list.extend(samples['features'])
-    print(sample_list[0])
+
+    # determine area in/out of point area
+    if ee_poly:
+        def area_in_out(feature):
+            feature_area = feature.area()
+            area_in = ee_poly.intersection(feature.geometry()).area()
+            return feature.set({
+                'area_out': feature_area.subtract(area_in),
+                'area_in': area_in})
+
+        samples = year_points.map(area_in_out).getInfo()
+        sample_list.extend(samples['features'])
+        print(samples)
+
     return header_fields_with_prev_year, sample_list
 
 
@@ -278,8 +303,10 @@ def main():
             args.long_field: lambda x: float(x),
             args.lat_field: lambda x: float(x),
             args.year_field: lambda x: int(x),
-        })
+        },
+        nrows=10)
 
+    ee_poly = None
     if args.polygon_path:
         # convert to GEE polygon
         gp_poly = geopandas.read_file(args.polygon_path).to_crs('EPSG:4326')
@@ -299,8 +326,8 @@ def main():
                 table[args.year_field] == year].dropna().iterrows()])
 
     print('calculating pheno variables')
-    header_fields, sample_list = _sample_pheno(pts_by_year, args.nlcd, args.corine)
-
+    header_fields, sample_list = _sample_pheno(
+        pts_by_year, args.nlcd, args.corine, ee_poly)
 
     with open(f'sampled_{args.buffer}m_{landcover_substring}_{os.path.basename(args.csv_path)}', 'w') as table_file:
         table_file.write(
