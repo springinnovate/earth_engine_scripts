@@ -251,23 +251,22 @@ def _sample_pheno(pts_by_year, nlcd_flag, corine_flag, ee_poly):
                 all_bands = all_bands.addBands(corine_closest_year_image)
 
         print('reduce regions')
+
+        # determine area in/out of point area
+        if ee_poly:
+            def area_in_out(feature):
+                feature_area = feature.area()
+                area_in = ee_poly.intersection(feature.geometry()).area()
+                return feature.set({
+                    POLY_OUT_FIELD: feature_area.subtract(area_in),
+                    POLY_IN_FIELD: area_in})
+
+            year_points = year_points.map(area_in_out).getInfo()
+
         samples = all_bands.reduceRegions(**{
             'collection': year_points,
             'reducer': REDUCER}).getInfo()
         sample_list.extend(samples['features'])
-
-    # determine area in/out of point area
-    if ee_poly:
-        def area_in_out(feature):
-            feature_area = feature.area()
-            area_in = ee_poly.intersection(feature.geometry()).area()
-            return feature.set({
-                'area_out': feature_area.subtract(area_in),
-                'area_in': area_in})
-
-        samples = year_points.map(area_in_out).getInfo()
-        sample_list.extend(samples['features'])
-        print(samples)
 
     return header_fields_with_prev_year, sample_list
 
