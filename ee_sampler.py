@@ -2,10 +2,18 @@
 from datetime import datetime
 import argparse
 import os
+import json
 
+from osgeo import gdal
+from osgeo import ogr
+from osgeo import osr
+import geopandas
+import shapely.ops
+import shapely.wkt
 import ee
 import numpy
 import pandas
+
 
 REDUCER = 'mean'
 NLCD_DATASET = 'USGS/NLCD_RELEASES/2016_REL'
@@ -271,6 +279,16 @@ def main():
             args.lat_field: lambda x: float(x),
             args.year_field: lambda x: int(x),
         })
+
+    if args.polygon_path:
+        # convert to GEE polygon
+        gp_poly = geopandas.read_file(args.polygon_path).to_crs('EPSG:4326')
+        json_poly = json.loads(gp_poly.to_json())
+        coords = []
+        for json_feature in json_poly['features']:
+            coords.append(json_feature['geometry']['coordinates'])
+        ee_poly = ee.Geometry.MultiPolygon(coords)
+
     pts_by_year = {}
     for year in table[args.year_field].unique():
         pts_by_year[year] = ee.FeatureCollection([
@@ -282,6 +300,7 @@ def main():
 
     print('calculating pheno variables')
     header_fields, sample_list = _sample_pheno(pts_by_year, args.nlcd, args.corine)
+
 
     with open(f'sampled_{args.buffer}m_{landcover_substring}_{os.path.basename(args.csv_path)}', 'w') as table_file:
         table_file.write(
