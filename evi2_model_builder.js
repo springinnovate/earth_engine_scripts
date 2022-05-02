@@ -1,3 +1,7 @@
+var geometry = /* color: #bf04c2 */ee.Geometry.Point([-84.32501915805545, 9.499473277782709]),
+    world = ee.FeatureCollection("FAO/GAUL/2015/level0"),
+    L8 = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2");
+
 var year = 2019;
 var percentile = 20;
 
