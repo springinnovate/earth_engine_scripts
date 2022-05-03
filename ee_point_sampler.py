@@ -170,13 +170,14 @@ def _sample_modis_by_year(pts_by_year, nlcd_flag, corine_flag, ee_poly):
         all_bands = ee.Image(0).rename('init')
         for active_year, band_name_suffix in (
                 (year, ''), (year-1, PREV_YEAR_TAG)):
-            if active_year in modis_db['valid_years']:
+            # active year is stored as a string
+            if int(active_year) in modis_db['valid_years']:
                 print(f'modis active_year: {active_year}/{band_name_suffix}')
 
                 # Get date based values and convert to be days since start
                 # of active_year
                 modis_band_renames = [
-                    f'modis-{field}-{band_name_suffix}'
+                    f'modis-{field}{band_name_suffix}'
                     for field in modis_db['julian_day_variables']]
                 bands_since_1970 = modis_phen.select(
                     modis_db['julian_day_variables']).filterDate(
@@ -186,17 +187,18 @@ def _sample_modis_by_year(pts_by_year, nlcd_flag, corine_flag, ee_poly):
                 days_since_epoch = (current_year - epoch_date).days
                 julian_day_bands = (
                     bands_since_1970.toBands()).subtract(days_since_epoch)
-                all_bands.addBands(julian_day_bands.rename(modis_band_renames))
+                all_bands = all_bands.addBands(
+                    julian_day_bands.rename(modis_band_renames))
 
                 raw_variable_bands = modis_phen.select(
                     modis_db['raw_variables']).filterDate(
                     f'{active_year}-01-01', f'{active_year}-12-31').toBands()
                 raw_band_renames = [
-                    f'modis-{field}-{band_name_suffix}'
+                    f'modis-{field}{band_name_suffix}'
                     for field in modis_db['raw_variables']]
                 raw_variable_bands = raw_variable_bands.rename(
                     raw_band_renames)
-                all_bands.addBands(raw_variable_bands)
+                all_bands =  all_bands.addBands(raw_variable_bands)
 
         print(f'summarize by points for year {year}')
         year_points = pts_by_year[year]
@@ -216,10 +218,14 @@ def _sample_modis_by_year(pts_by_year, nlcd_flag, corine_flag, ee_poly):
             # TODO: do I need getInfo for the reduce regions?
             year_points = year_points.map(area_in_out)
 
+        print(all_bands.getInfo())
         year_point_samples = all_bands.reduceRegions(**{
             'collection': year_points,
-            'reducer': REDUCER}).getInfo()
+            'reducer': REDUCER,
+            'scale': 30
+            }).getInfo()
         point_sample_list.extend(year_point_samples['features'])
+    return point_sample_list
 
 
 def _old_sample_pheno(pts_by_year, nlcd_flag, corine_flag, ee_poly):
@@ -511,27 +517,29 @@ def main():
 
     ee_poly = None
     if args.polygon_path:
+        print(f'loading polygon at {args.polygon_path}')
         ee_poly = _load_ee_poly(args.polygon_path)
 
+    print(f'break out points by year and buffer to {args.point_buffer}m')
     pts_by_year = _filter_and_buffer_points_by_year(
         point_table, args.lat_field, args.long_field, args.year_field,
         args.point_buffer)
 
-    print('sample modis')
-
-
-
     print('calculating pheno variables')
-    header_fields, sample_list = _sample_pheno(
+    sample_list = _sample_modis_by_year(
         pts_by_year, args.nlcd, args.corine, ee_poly)
+    print(sample_list)
+    return
+    # TODO: get feature headers out of sample list
+    header_fields = None
 
     with open(f'sampled_{args.buffer}m_{landcover_substring}_{os.path.basename(args.csv_path)}', 'w') as table_file:
         table_file.write(
-            ','.join(table.columns) + f',{",".join(header_fields)}\n')
+            ','.join(point_table.columns) + f',{",".join(header_fields)}\n')
         for sample in sample_list:
             table_file.write(','.join([
                 str(sample['properties'][key])
-                for key in table.columns]) + ',')
+                for key in point_table.columns]) + ',')
             table_file.write(','.join([
                 'invalid' if field not in sample['properties']
                 else str(sample['properties'][field])
