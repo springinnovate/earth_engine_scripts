@@ -1,4 +1,4 @@
-"""Sample GEE datasets given pest control CSV."""
+"""Samples GEE assets using provided CSV point tables."""
 from datetime import datetime
 import argparse
 import os
@@ -11,18 +11,28 @@ import pandas
 
 
 REDUCER = 'mean'
-NLCD_DATASET = 'USGS/NLCD_RELEASES/2016_REL'
-NLCD_VALID_YEARS = numpy.array([
-    1992, 2001, 2004, 2006, 2008, 2011, 2013, 2016])
-NLCD_CLOSEST_YEAR_FIELD = 'NLCD-year'
-NLCD_NATURAL_FIELD = 'NLCD-natural'
-NLCD_CULTIVATED_FIELD = 'NLCD-cultivated'
 
-CORINE_DATASET = 'COPERNICUS/CORINE/V20/100m'
-CORINE_VALID_YEARS = numpy.array([1990, 2000, 2006, 2012, 2018])
-CORINE_CLOSEST_YEAR_FIELD = 'CORINE-year'
-CORINE_NATURAL_FIELD = 'CORINE-natural'
-CORINE_CULTIVATED_FIELD = 'CORINE-cultivated'
+LANDUSE_RASTERS = {
+    'nlcd': {
+        'dataset': 'USGS/NLCD_RELEASES/2016_REL',
+        'valid_years': numpy.array([
+            1992, 2001, 2004, 2006, 2008, 2011, 2013, 2016]),
+        'closest_year_field': 'NLCD-year',
+        'natural_field': 'NLCD-natural',
+        'cultivated_field': 'NLCD-cultivated',
+        'natural_id_list': [(41, 74), (90, 95)],
+        'cultivated_id_list': [(81, 82)],
+        },
+    'corine': {
+        'dataset': 'COPERNICUS/CORINE/V20/100m',
+        'valid_years': numpy.array([1990, 2000, 2006, 2012, 2018]),
+        'closest_year_field': 'CORINE-year',
+        'natural_field': 'CORINE-natural',
+        'cultivated_field': 'CORINE-cultivated',
+        'natural_id_list': [(311, 423)],
+        'cultivated_id_list': [(211, 244)],
+    }
+}
 
 POLY_IN_FIELD = 'POLY-in'
 POLY_OUT_FIELD = 'POLY-out'
@@ -33,27 +43,83 @@ MODIS_DATASET_NAME = 'MODIS/006/MCD12Q2'  # 500m resolution
 VALID_MODIS_RANGE = (2001, 2019)
 
 
+def _filter_and_buffer_points_by_year(
+        point_table, lat_field, long_field, year_field, point_buffer):
+    """Separate points in Geopandas table by year.
+
+    Args:
+        point_table (geopandas.Dataframe): table with lat/lng and year fields
+        lat_field (str): fieldname for lat in ``table``
+        long_field (str): fieldname for long in ``table``
+        year_field (str): fieldname for year in ``table``
+        point_buffer (float): distance in m to buffer points
+
+    Returns:
+        dict of list of ee.Features of points indexed by year from ``table``
+    """
+    pts_by_year = {}
+    for year in point_table[year_field].unique():
+        pts_by_year[year] = ee.FeatureCollection([
+            ee.Feature(ee.Geometry.Point(
+                row[long_field], row[lat_field]).buffer(point_buffer),
+                row.to_dict())
+            for index, row in point_table[
+                point_table[year_field] == year].dropna().iterrows()])
+    return pts_by_year
+
+
+def _load_ee_poly(polygon_path):
+    """Read a polygon path from disk and convert to WGS84 GEE Polygon."""
+    gp_poly = geopandas.read_file(polygon_path).to_crs('EPSG:4326')
+    json_poly = json.loads(gp_poly.to_json())
+    coords = [
+        json_feature['geometry']['coordinates']
+        for json_feature in json_poly['features']]
+    ee_poly = ee.Geometry.MultiPolygon(coords)
+    return ee_poly
+
+
 def _get_closest_num(number_list, candidate):
     """Return closest number in sorted list."""
     index = (numpy.abs(number_list - candidate)).argmin()
     return int(number_list[index])
 
 
-def _corine_natural_cultivated_mask(year):
-    """Natural: 311-423, Cultivated: 211 - 244."""
-    closest_year = _get_closest_num(CORINE_VALID_YEARS, year)
-    corine_imagecollection = ee.ImageCollection(CORINE_DATASET)
+def _calculate_natural_cultivated_masks(dataset_id, year):
+    """Create a natural/cultivated mask given a dataset and list of valid ids.
 
-    corine_landcover = corine_imagecollection.filter(
-        ee.Filter.eq('system:index', str(closest_year))).first().select('landcover')
+    Args:
+        dataset_id (str): a string representing a valid entry in
+            ``LANDUSE_RASTERS`` that contains indexes for
+            'valid_years', 'cultivated_id_list', 'cultivated_field',
+            'natural_field', 'natural_id_list'.
+        year (int): a year to sample from the given dataset
 
-    natural_mask = ee.Image(0).where(
-        corine_landcover.gte(311).And(corine_landcover.lte(423)), 1)
-    natural_mask = natural_mask.rename(CORINE_NATURAL_FIELD)
+    Return:
+        natural_mask (ee.Image == 1 where natural),
+        cultivated_mask (ee.Image == 1 where cultivated),
+        closest_year (int indicating closest year match to requested)
+    """
+    raster = LANDUSE_RASTERS[dataset_id]
+    closest_year = _get_closest_num(raster['valid_years'], year)
+    image_collection = ee.ImageCollection(raster['dataset'])
 
-    cultivated_mask = ee.Image(0).where(
-        corine_landcover.gte(211).And(corine_landcover.lte(244)), 1)
-    cultivated_mask = cultivated_mask.rename(CORINE_CULTIVATED_FIELD)
+    landcover_image = image_collection.filter(
+        ee.Filter.eq('system:index', str(closest_year))).first().select(
+        'landcover')
+
+    natural_mask = ee.Image(0)
+    cultivated_mask = ee.Image(0)
+    for mask_image, id_list, band_name in [
+            (natural_mask,
+             raster['cultivated_id_list'], raster['natural_field']),
+            (cultivated_mask,
+             raster['natural_id_list'], raster['cultivated_field'])]:
+        for (low_id, high_id) in id_list:
+            mask_image = mask_image.Or(
+                landcover_image.gte(low_id).And(landcover_image.lte(high_id)))
+        mask_image = mask_image.rename(band_name)
+
     return natural_mask, cultivated_mask, closest_year
 
 
@@ -284,7 +350,7 @@ def _sample_pheno(pts_by_year, nlcd_flag, corine_flag, ee_poly):
                         nlcd_cultivated_mask_poly_out)
                     nlcd_cultivated_variable_bands_poly_out = \
                         nlcd_cultivated_variable_bands_poly_out.rename([
-                            f'{band_name}-{NLCD_CULTIVATED_FIELD}-{POLY_OUT_FIELD}',
+                            f'{band_name}-{NLCD_CULTIVATED_FIELD}-{POLY_OUT_FIELD}'
                             for band_name in all_band_names])
 
                     nlcd_natural_variable_bands_poly_out = local_band_stack.updateMask(
@@ -352,55 +418,44 @@ def _sample_pheno(pts_by_year, nlcd_flag, corine_flag, ee_poly):
 def main():
     """Entry point."""
     parser = argparse.ArgumentParser(
-        description='sample points on GEE data')
+        description='Sample MODIS biophyisical areas on point data with additional information specified about cultivated/natural areas.')
     parser.add_argument('csv_path', help='path to CSV data table')
     parser.add_argument('--year_field', default='crop_year', help='field name in csv_path for year, default `year_field`')
     parser.add_argument('--long_field', default='field_longitude', help='field name in csv_path for longitude, default `long_field`')
     parser.add_argument('--lat_field', default='field_latitude', help='field name in csv_path for latitude, default `lat_field')
-    parser.add_argument('--buffer', type=float, default=1000, help='buffer distance in meters around point to do aggregate analysis, default 1000m')
-    parser.add_argument('--nlcd', default=False, action='store_true', help='use NCLD landcover for cultivated/natural masks')
-    parser.add_argument('--corine', default=False, action='store_true', help='use CORINE landcover for cultivated/natural masks')
-    parser.add_argument('--polygon_path', type=str, help='path to local polygon to sample')
-
-    # 2) the natural habitat eo characteristics in and out of polygon
-    # 3) proportion of area outside of polygon
+    parser.add_argument('--point_buffer', type=float, default=1000, help='buffer distance in meters around point to do aggregate analysis, default 1000m')
+    parser.add_argument('--nlcd', default=False, action='store_true', help='sample the NCLD landcover for cultivated/natural masks')
+    parser.add_argument('--corine', default=False, action='store_true', help='sample the CORINE landcover for cultivated/natural masks')
+    parser.add_argument('--polygon_path', type=str, help='this polygon modifies samples to include inside and outside of the sampled datasets')
+    parser.add_argument('--n_rows', type=int, help='limit the number of points read from the CSV to this value, useful for debugging.')
 
     parser.add_argument('--authenticate', action='store_true', help='Pass this flag if you need to reauthenticate with GEE')
     args = parser.parse_args()
-    if not any([args.nlcd, args.corine]):
-        raise ValueError('must select at least --nlcd or --corine LULC datasets')
 
     landcover_options = [x for x in ['nlcd', 'corine'] if vars(args)[x]]
     landcover_substring = '_'.join(landcover_options)
     if args.authenticate:
         ee.Authenticate()
     ee.Initialize()
-    table = pandas.read_csv(
+    point_table = pandas.read_csv(
         args.csv_path, converters={
             args.long_field: lambda x: float(x),
             args.lat_field: lambda x: float(x),
             args.year_field: lambda x: int(x),
         },
-        nrows=10)
+        nrows=args.n_rows)
 
     ee_poly = None
     if args.polygon_path:
-        # convert to GEE polygon
-        gp_poly = geopandas.read_file(args.polygon_path).to_crs('EPSG:4326')
-        json_poly = json.loads(gp_poly.to_json())
-        coords = []
-        for json_feature in json_poly['features']:
-            coords.append(json_feature['geometry']['coordinates'])
-        ee_poly = ee.Geometry.MultiPolygon(coords)
+        ee_poly = _load_ee_poly(args.polygon_path)
 
-    pts_by_year = {}
-    for year in table[args.year_field].unique():
-        pts_by_year[year] = ee.FeatureCollection([
-            ee.Feature(
-                ee.Geometry.Point(row[args.long_field], row[args.lat_field]).buffer(args.buffer),
-                row.to_dict())
-            for index, row in table[
-                table[args.year_field] == year].dropna().iterrows()])
+    pts_by_year = _filter_and_buffer_points_by_year(
+        point_table, args.lat_field, args.long_field, args.year_field,
+        args.point_buffer)
+
+    print('sample modis')
+
+
 
     print('calculating pheno variables')
     header_fields, sample_list = _sample_pheno(
