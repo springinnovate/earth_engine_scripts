@@ -1,6 +1,7 @@
 """Samples GEE assets using provided CSV point tables."""
 from datetime import datetime
 import argparse
+import functools
 import os
 import json
 
@@ -167,7 +168,7 @@ def _sample_modis_by_year(pts_by_year, nlcd_flag, corine_flag, ee_poly):
         print(f'processing year {year}')
 
         print('process MODIS')
-        all_bands = ee.Image(0).rename('init')
+        band_list = []
         for active_year, band_name_suffix in (
                 (year, ''), (year-1, PREV_YEAR_TAG)):
             # active year is stored as a string
@@ -187,8 +188,7 @@ def _sample_modis_by_year(pts_by_year, nlcd_flag, corine_flag, ee_poly):
                 days_since_epoch = (current_year - epoch_date).days
                 julian_day_bands = (
                     bands_since_1970.toBands()).subtract(days_since_epoch)
-                all_bands = all_bands.addBands(
-                    julian_day_bands.rename(modis_band_renames))
+                band_list.append(julian_day_bands.rename(modis_band_renames))
 
                 raw_variable_bands = modis_phen.select(
                     modis_db['raw_variables']).filterDate(
@@ -196,9 +196,7 @@ def _sample_modis_by_year(pts_by_year, nlcd_flag, corine_flag, ee_poly):
                 raw_band_renames = [
                     f'modis-{field}{band_name_suffix}'
                     for field in modis_db['raw_variables']]
-                raw_variable_bands = raw_variable_bands.rename(
-                    raw_band_renames)
-                all_bands =  all_bands.addBands(raw_variable_bands)
+                band_list.append(raw_variable_bands.rename(raw_band_renames))
 
         print(f'summarize by points for year {year}')
         year_points = pts_by_year[year]
@@ -218,6 +216,7 @@ def _sample_modis_by_year(pts_by_year, nlcd_flag, corine_flag, ee_poly):
             # TODO: do I need getInfo for the reduce regions?
             year_points = year_points.map(area_in_out)
 
+        all_bands = functools.reduce(lambda x, y: x.addBands(y), band_list)
         print(all_bands.getInfo())
         year_point_samples = all_bands.reduceRegions(**{
             'collection': year_points,
