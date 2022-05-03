@@ -12,9 +12,9 @@ import pandas
 
 REDUCER = 'mean'
 
-LANDUSE_RASTERS = {
+RASTER_DB = {
     'nlcd': {
-        'dataset': 'USGS/NLCD_RELEASES/2016_REL',
+        'asset_id': 'USGS/NLCD_RELEASES/2016_REL',
         'valid_years': numpy.array([
             1992, 2001, 2004, 2006, 2008, 2011, 2013, 2016]),
         'closest_year_field': 'NLCD-year',
@@ -24,23 +24,39 @@ LANDUSE_RASTERS = {
         'cultivated_id_list': [(81, 82)],
         },
     'corine': {
-        'dataset': 'COPERNICUS/CORINE/V20/100m',
+        'asset_id': 'COPERNICUS/CORINE/V20/100m',
         'valid_years': numpy.array([1990, 2000, 2006, 2012, 2018]),
         'closest_year_field': 'CORINE-year',
         'natural_field': 'CORINE-natural',
         'cultivated_field': 'CORINE-cultivated',
         'natural_id_list': [(311, 423)],
         'cultivated_id_list': [(211, 244)],
-    }
+    },
+    'modis': {
+        'asset_id': 'MODIS/006/MCD12Q2',
+        'valid_years': numpy.array(range(2001, 2010)),
+        'julian_day_variables': [
+            'Greenup_1',
+            'MidGreenup_1',
+            'Peak_1',
+            'Maturity_1',
+            'MidGreendown_1',
+            'Senescence_1',
+            'Dormancy_1',
+            ],
+        'raw_variables': [
+            'EVI_Minimum_1',
+            'EVI_Amplitude_1',
+            'EVI_Area_1',
+            'QA_Overall_1',
+            ]
+    },
 }
 
 POLY_IN_FIELD = 'POLY-in'
 POLY_OUT_FIELD = 'POLY-out'
 
 PREV_YEAR_TAG = '-prev-year'
-
-MODIS_DATASET_NAME = 'MODIS/006/MCD12Q2'  # 500m resolution
-VALID_MODIS_RANGE = (2001, 2019)
 
 
 def _filter_and_buffer_points_by_year(
@@ -90,7 +106,7 @@ def _calculate_natural_cultivated_masks(dataset_id, year):
 
     Args:
         dataset_id (str): a string representing a valid entry in
-            ``LANDUSE_RASTERS`` that contains indexes for
+            ``RASTER_DB`` that contains indexes for
             'valid_years', 'cultivated_id_list', 'cultivated_field',
             'natural_field', 'natural_id_list'.
         year (int): a year to sample from the given dataset
@@ -100,9 +116,9 @@ def _calculate_natural_cultivated_masks(dataset_id, year):
         cultivated_mask (ee.Image == 1 where cultivated),
         closest_year (int indicating closest year match to requested)
     """
-    raster = LANDUSE_RASTERS[dataset_id]
+    raster = RASTER_DB[dataset_id]
     closest_year = _get_closest_num(raster['valid_years'], year)
-    image_collection = ee.ImageCollection(raster['dataset'])
+    image_collection = ee.ImageCollection(raster['asset_id'])
 
     landcover_image = image_collection.filter(
         ee.Filter.eq('system:index', str(closest_year))).first().select(
@@ -123,7 +139,65 @@ def _calculate_natural_cultivated_masks(dataset_id, year):
     return natural_mask, cultivated_mask, closest_year
 
 
-def _sample_pheno(pts_by_year, nlcd_flag, corine_flag, ee_poly):
+def _sample_modis_by_year(pts_by_year, nlcd_flag, corine_flag, ee_poly):
+    """Sample MODIS variables by year with NLCD/CORINE/polygon intersection.
+
+    Sample all variables from https://docs.google.com/spreadsheets/d/1nbmCKwIG29PF6Un3vN6mQGgFSWG_vhB6eky7wVqVwPo
+
+    Args:
+        pts_by_year (dict): dictionary of list of points indexed by year.
+        nlcd_flag (bool): if True, sample the NLCD dataset for cult/ag
+        corine_flag (bool): if True, sample the CORINE dataset for cult/ag
+        ee_poly (ee.Polygon): if not None, additionally filter samples by
+            in/out of polygon.
+
+    Returns:
+        points with entries for every sample?
+
+    """
+    modis_db = RASTER_DB['modis']
+    # this is the year that julian times are based on for MODIS
+    epoch_date = datetime.strptime('1970-01-01', "%Y-%m-%d")
+    modis_phen = ee.ImageCollection(modis_db['asset_id'])
+
+    for year in pts_by_year.keys():
+        print(f'processing year {year}')
+        #year_points = pts_by_year[year]
+        all_bands = ee.Image(0).rename('init')
+
+        for active_year, band_name_suffix in (
+                (year, ''), (year-1, PREV_YEAR_TAG)):
+            if active_year in modis_db['valid_years']:
+                print(f'modis active_year: {active_year}/{band_name_suffix}')
+
+                # Get date based values and convert to be days since start
+                # of active_year
+                modis_band_renames = [
+                    f'modis-{field}-{band_name_suffix}'
+                    for field in modis_db['julian_day_variables']]
+                bands_since_1970 = modis_phen.select(
+                    modis_db['julian_day_variables']).filterDate(
+                    f'{active_year}-01-01', f'{active_year}-12-31')
+                current_year = datetime.strptime(
+                    f'{active_year}-01-01', "%Y-%m-%d")
+                days_since_epoch = (current_year - epoch_date).days
+                julian_day_bands = (
+                    bands_since_1970.toBands()).subtract(days_since_epoch)
+                all_bands.addBands(julian_day_bands.rename(modis_band_renames))
+
+                raw_variable_bands = modis_phen.select(
+                    modis_db['raw_variables']).filterDate(
+                    f'{active_year}-01-01', f'{active_year}-12-31').toBands()
+                raw_band_renames = [
+                    f'modis-{field}-{band_name_suffix}'
+                    for field in modis_db['raw_variables']]
+                raw_variable_bands = raw_variable_bands.rename(
+                    raw_band_renames)
+                all_bands.addBands(raw_variable_bands)
+
+
+
+def _old_sample_pheno(pts_by_year, nlcd_flag, corine_flag, ee_poly):
     """Sample phenology variables from https://docs.google.com/spreadsheets/d/1nbmCKwIG29PF6Un3vN6mQGgFSWG_vhB6eky7wVqVwPo
 
     Args:
