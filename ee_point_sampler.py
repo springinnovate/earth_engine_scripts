@@ -123,41 +123,6 @@ def _calculate_natural_cultivated_masks(dataset_id, year):
     return natural_mask, cultivated_mask, closest_year
 
 
-def _nlcd_natural_cultivated_mask(year, ee_poly):
-    """Natural for NLCD in 41-74 or 90-95."""
-    closest_year = _get_closest_num(NLCD_VALID_YEARS, year)
-    nlcd_imagecollection = ee.ImageCollection(NLCD_DATASET)
-    nlcd_year = nlcd_imagecollection.filter(
-        ee.Filter.eq('system:index', str(closest_year))).first().select('landcover')
-    # natural 41-74 & 90-95
-    natural_mask = ee.Image(0).where(
-        nlcd_year.gte(41).And(nlcd_year.lte(74)).Or(
-            nlcd_year.gte(90).And(nlcd_year.lte(95))), 1)
-    natural_mask = natural_mask.rename(NLCD_NATURAL_FIELD)
-
-    cultivated_mask = ee.Image(0).where(
-        nlcd_year.gte(81).And(nlcd_year.lte(82)), 1)
-    cultivated_mask = cultivated_mask.rename(NLCD_CULTIVATED_FIELD)
-
-    if not ee_poly:
-        return natural_mask, cultivated_mask, closest_year
-
-    # create masks of in/out using same bounds as base image
-    polymask = natural_mask.updateMask(ee.Image(1).clip(ee_poly)).unmask().gt(0)
-    inv_polymask = polymask.unmask().Not()
-
-    natural_mask_in = natural_mask.updateMask(polymask)
-    cultivated_mask_in = cultivated_mask.updateMask(polymask)
-    closest_year_in = closest_year.updateMask(polymask)
-    natural_mask_out = natural_mask.updateMask(inv_polymask)
-    cultivated_mask_out = cultivated_mask.updateMask(inv_polymask)
-    closest_year_out = closest_year.updateMask(inv_polymask)
-
-    return (
-        natural_mask_in, cultivated_mask_in,
-        natural_mask_out, cultivated_mask_out, closest_year)
-
-
 def _sample_pheno(pts_by_year, nlcd_flag, corine_flag, ee_poly):
     """Sample phenology variables from https://docs.google.com/spreadsheets/d/1nbmCKwIG29PF6Un3vN6mQGgFSWG_vhB6eky7wVqVwPo
 
