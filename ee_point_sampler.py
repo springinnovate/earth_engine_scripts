@@ -160,11 +160,14 @@ def _sample_modis_by_year(pts_by_year, nlcd_flag, corine_flag, ee_poly):
     epoch_date = datetime.strptime('1970-01-01', "%Y-%m-%d")
     modis_phen = ee.ImageCollection(modis_db['asset_id'])
 
+    # this is the result that is returned -- points with sampled features
+    point_sample_list = []
+
     for year in pts_by_year.keys():
         print(f'processing year {year}')
-        #year_points = pts_by_year[year]
-        all_bands = ee.Image(0).rename('init')
 
+        print('process MODIS')
+        all_bands = ee.Image(0).rename('init')
         for active_year, band_name_suffix in (
                 (year, ''), (year-1, PREV_YEAR_TAG)):
             if active_year in modis_db['valid_years']:
@@ -195,6 +198,28 @@ def _sample_modis_by_year(pts_by_year, nlcd_flag, corine_flag, ee_poly):
                     raw_band_renames)
                 all_bands.addBands(raw_variable_bands)
 
+        print(f'summarize by points for year {year}')
+        year_points = pts_by_year[year]
+        # determine area in/out of point area
+        if ee_poly:
+            print('calculate area in/out of polygon per point')
+
+            def area_in_out(feature):
+                """Calculate area inside/outside of poly for given feature."""
+                feature_area = feature.area()
+                area_in = ee_poly.intersection(feature.geometry()).area()
+                return feature.set({
+                    POLY_OUT_FIELD: feature_area.subtract(area_in),
+                    POLY_IN_FIELD: area_in})
+
+            #year_points = year_points.map(area_in_out).getInfo()
+            # TODO: do I need getInfo for the reduce regions?
+            year_points = year_points.map(area_in_out)
+
+        year_point_samples = all_bands.reduceRegions(**{
+            'collection': year_points,
+            'reducer': REDUCER}).getInfo()
+        point_sample_list.extend(year_point_samples['features'])
 
 
 def _old_sample_pheno(pts_by_year, nlcd_flag, corine_flag, ee_poly):
