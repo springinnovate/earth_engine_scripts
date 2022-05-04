@@ -153,15 +153,16 @@ def _calculate_natural_cultivated_masks(dataset_id, year):
     return natural_mask, cultivated_mask, closest_year
 
 
-def _sample_modis_by_year(pts_by_year, nlcd_flag, corine_flag, ee_poly):
+def _sample_modis_by_year(pts_by_year, cult_ag_id_list, ee_poly):
     """Sample MODIS variables by year with NLCD/CORINE/polygon intersection.
 
     Sample all variables from https://docs.google.com/spreadsheets/d/1nbmCKwIG29PF6Un3vN6mQGgFSWG_vhB6eky7wVqVwPo
 
     Args:
         pts_by_year (dict): dictionary of list of points indexed by year.
-        nlcd_flag (bool): if True, sample the NLCD dataset for cult/ag
-        corine_flag (bool): if True, sample the CORINE dataset for cult/ag
+        cult_ag_id_list (list): list of entries in RASTER_DB that are used
+            for cultivated and agricultural masking to additionally mask
+            MODIS products
         ee_poly (ee.Polygon): if not None, additionally filter samples by
             in/out of polygon.
 
@@ -189,32 +190,49 @@ def _sample_modis_by_year(pts_by_year, nlcd_flag, corine_flag, ee_poly):
                 (year, ''), (year-1, PREV_YEAR_TAG)):
             # active year is stored as a string
             if int(active_year) in modis_db['valid_years']:
-                LOGGER.info(f'modis active_year: {active_year}/{band_name_suffix}')
+                LOGGER.info(
+                    f'modis active_year: {active_year}/{band_name_suffix}')
 
-                # Get date based values and convert to be days since start
-                # of active_year
-                modis_band_renames = [
-                    f'{MODIS_ID}-{field}{band_name_suffix}'
-                    for field in modis_db['julian_day_variables']]
-                band_id_set = band_id_set.union(set(modis_band_renames))
-                bands_since_1970 = modis_phen.select(
-                    modis_db['julian_day_variables']).filterDate(
-                    f'{active_year}-01-01', f'{active_year}-12-31')
-                current_year = datetime.strptime(
-                    f'{active_year}-01-01', "%Y-%m-%d")
-                days_since_epoch = (current_year - epoch_date).days
-                julian_day_bands = (
-                    bands_since_1970.toBands()).subtract(days_since_epoch)
-                band_list.append(julian_day_bands.rename(modis_band_renames))
+                # TODO:
+                # natural_mask, cultivated_mask, closest_year = _calculate_natural_cultivated_masks(dataset_id, year)
+                for cult_ag_id in [''] + cult_ag_id_list:
+                    if cult_ag_id:
+                        natural_mask, cultivated_mask, closest_year = (
+                            _calculate_natural_cultivated_masks(
+                                cult_ag_id, year))
+                        mask_loop_args = [
+                            (natural_mask, f'-{cult_ag_id}-natural{band_name_suffix}'),
+                            (cultivated_mask, f'-{cult_ag_id}-cultivated{band_name_suffix}')]
+                    else:
+                        mask_loop_args = [(ee.Image(1), band_name_suffix)]
 
-                raw_variable_bands = modis_phen.select(
-                    modis_db['raw_variables']).filterDate(
-                    f'{active_year}-01-01', f'{active_year}-12-31').toBands()
-                raw_band_renames = [
-                    f'{MODIS_ID}-{field}{band_name_suffix}'
-                    for field in modis_db['raw_variables']]
-                band_id_set = band_id_set.union(set(raw_band_renames))
-                band_list.append(raw_variable_bands.rename(raw_band_renames))
+                    for mask_raster, band_suffix in mask_loop_args:
+                        # Get date based values and convert to be days since start
+                        # of active_year
+                        modis_band_renames = [
+                            f'{MODIS_ID}-{field}{band_suffix}'
+                            for field in modis_db['julian_day_variables']]
+                        band_id_set = band_id_set.union(set(modis_band_renames))
+                        bands_since_1970 = modis_phen.select(
+                            modis_db['julian_day_variables']).filterDate(
+                            f'{active_year}-01-01', f'{active_year}-12-31')
+
+                        current_year = datetime.strptime(
+                            f'{active_year}-01-01', "%Y-%m-%d")
+                        days_since_epoch = (current_year - epoch_date).days
+                        julian_day_bands = (
+                            bands_since_1970.toBands()).subtract(days_since_epoch).updateMask(mask_raster)
+                        band_list.append(
+                            julian_day_bands.rename(modis_band_renames))
+
+                        raw_variable_bands = modis_phen.select(
+                            modis_db['raw_variables']).filterDate(
+                            f'{active_year}-01-01', f'{active_year}-12-31').toBands().updateMask(mask_raster)
+                        raw_band_renames = [
+                            f'{MODIS_ID}-{field}{band_suffix}'
+                            for field in modis_db['raw_variables']]
+                        band_id_set = band_id_set.union(set(raw_band_renames))
+                        band_list.append(raw_variable_bands.rename(raw_band_renames))
 
         LOGGER.info(f'summarize by points for year {year}')
         year_points = pts_by_year[year]
@@ -543,8 +561,14 @@ def main():
         args.point_buffer)
 
     LOGGER.info('calculating pheno variables')
+    cult_ag_id_list = []
+    if args.nlcd:
+        cult_ag_id_list.append(NLCD_ID)
+    if args.corine:
+        cult_ag_id_list.append(CORINE_ID)
+
     sample_keys, sample_list = _sample_modis_by_year(
-        pts_by_year, args.nlcd, args.corine, ee_poly)
+        pts_by_year, cult_ag_id_list, ee_poly)
 
     # take out the point table columns so we can do them first
     sample_keys = list(sorted(sample_keys))
