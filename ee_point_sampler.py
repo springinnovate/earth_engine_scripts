@@ -198,8 +198,6 @@ def _sample_modis_by_year(pts_by_year, cult_ag_id_list, ee_poly):
                 LOGGER.info(
                     f'modis active_year: {active_year}/{band_name_suffix}')
 
-                # TODO:
-                # natural_mask, cultivated_mask, closest_year = _calculate_natural_cultivated_masks(dataset_id, year)
                 for cult_ag_id in [''] + cult_ag_id_list:
                     if cult_ag_id:
                         natural_mask, cultivated_mask, closest_year = (
@@ -211,11 +209,10 @@ def _sample_modis_by_year(pts_by_year, cult_ag_id_list, ee_poly):
                             (cultivated_mask, f'-{cult_ag_id}-cultivated{band_name_suffix}')]
 
                         for mask_raster, band_suffix in mask_loop_args:
-                            cult_ag_band_id = f'{year}--{closest_year}{band_suffix}'
+                            cult_ag_band_id = f'{band_suffix[1:]}'
                             band_id_set.add(cult_ag_band_id)
                             band_list.append(
                                 mask_raster.rename(cult_ag_band_id))
-                        continue
                     else:
                         mask_loop_args = [(ee.Image(1), band_name_suffix)]
 
