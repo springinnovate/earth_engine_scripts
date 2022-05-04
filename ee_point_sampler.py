@@ -138,19 +138,24 @@ def _calculate_natural_cultivated_masks(dataset_id, year):
         ee.Filter.eq('system:index', str(closest_year))).first().select(
         'landcover')
 
-    natural_mask = ee.Image(0)
-    cultivated_mask = ee.Image(0)
-    for mask_image, id_list, band_name in [
-            (natural_mask,
+    mask_dict = {
+        'natural_mask': ee.Image(0),
+        'cultivated_mask': ee.Image(0)
+    }
+    for mask_id, id_list, band_name in [
+            ('natural_mask',
              raster['cultivated_id_list'], raster['natural_field']),
-            (cultivated_mask,
+            ('cultivated_mask',
              raster['natural_id_list'], raster['cultivated_field'])]:
         for (low_id, high_id) in id_list:
-            mask_image = mask_image.Or(
+            mask_dict[mask_id] = mask_dict[mask_id].Or(
                 landcover_image.gte(low_id).And(landcover_image.lte(high_id)))
-        mask_image = mask_image.rename(band_name)
+        mask_dict[mask_id] = mask_dict[mask_id].rename(band_name)
 
-    return natural_mask, cultivated_mask, closest_year
+    return (
+        mask_dict['natural_mask'],
+        mask_dict['cultivated_mask'],
+        closest_year)
 
 
 def _sample_modis_by_year(pts_by_year, cult_ag_id_list, ee_poly):
@@ -200,9 +205,17 @@ def _sample_modis_by_year(pts_by_year, cult_ag_id_list, ee_poly):
                         natural_mask, cultivated_mask, closest_year = (
                             _calculate_natural_cultivated_masks(
                                 cult_ag_id, year))
+                        LOGGER.debug(closest_year)
                         mask_loop_args = [
                             (natural_mask, f'-{cult_ag_id}-natural{band_name_suffix}'),
                             (cultivated_mask, f'-{cult_ag_id}-cultivated{band_name_suffix}')]
+
+                        for mask_raster, band_suffix in mask_loop_args:
+                            cult_ag_band_id = f'{year}--{closest_year}{band_suffix}'
+                            band_id_set.add(cult_ag_band_id)
+                            band_list.append(
+                                mask_raster.rename(cult_ag_band_id))
+                        continue
                     else:
                         mask_loop_args = [(ee.Image(1), band_name_suffix)]
 
