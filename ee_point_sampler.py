@@ -261,6 +261,24 @@ def _sample_modis_by_year(pts_by_year, cult_ag_id_list, ee_poly):
             band_id_set = band_id_set.union(
                 set([POLY_OUT_FIELD, POLY_IN_FIELD]))
 
+            for band in list(band_list):
+                poly_mask = band.updateMask(
+                    ee.Image(1).clip(ee_poly)).unmask().gt(0)
+                inv_polymask = poly_mask.Not()
+
+                band_name_list = band.bandNames().getInfo()
+                poly_in_band_names = [
+                    f'{name}-POLY-in' for name in band_name_list]
+                poly_out_band_names = [
+                    f'{name}-POLY-out' for name in band_name_list]
+                band_id_set = band_id_set.union(
+                    set(poly_in_band_names+poly_out_band_names))
+
+                band_list.append(band.updateMask(poly_mask).rename(
+                    poly_in_band_names))
+                band_list.append(band.updateMask(inv_polymask).rename(
+                    poly_out_band_names))
+
         all_bands = functools.reduce(lambda x, y: x.addBands(y), band_list)
         year_point_samples = all_bands.reduceRegions(**{
             'collection': year_points,
