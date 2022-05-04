@@ -20,6 +20,7 @@ logging.basicConfig(
         '%(asctime)s (%(relativeCreated)d) %(levelname)s %(name)s'
         ' [%(funcName)s:%(lineno)d] %(message)s'))
 logging.getLogger('fiona').setLevel(logging.WARN)
+logging.getLogger('ecoshard.taskgraph').setLevel(logging.WARN)
 LOGGER = logging.getLogger(__name__)
 
 
@@ -207,6 +208,10 @@ def _sample_modis_by_year(pts_by_year, cult_ag_id_list, ee_poly, sample_scale):
                             _calculate_natural_cultivated_masks(
                                 cult_ag_id, year))
                         LOGGER.debug(closest_year)
+                        closest_year_id = f'{cult_ag_id}-closest-year'
+                        band_id_set.add(closest_year_id)
+                        band_list.append(ee.Image(
+                            int(closest_year)).rename(closest_year_id))
                         mask_loop_args = [
                             (natural_mask, f'-{cult_ag_id}-natural{band_name_suffix}'),
                             (cultivated_mask, f'-{cult_ag_id}-cultivated{band_name_suffix}')]
@@ -347,7 +352,7 @@ def main():
                 args.long_field, args.year_field, args.point_buffer,
                 cult_ag_id_list, args.polygon_path, args.sample_scale),
             store_result=True,
-            task_id=f'sample table on index {index}')
+            task_name=f'sample table on index {index}')
 
         local_sample_keys, local_sample_list = sample_task.get()
         sample_keys = sample_keys.union(local_sample_keys)
@@ -384,6 +389,7 @@ def _sample_table(
 
     local_sample_keys, local_sample_list = _sample_modis_by_year(
         pts_by_year, cult_ag_id_list, ee_poly, sample_scale)
+    return (local_sample_keys, local_sample_list)
 
 
 if __name__ == '__main__':
