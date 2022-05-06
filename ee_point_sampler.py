@@ -378,7 +378,7 @@ def main():
     
     poly_str = '_'
     if args.polygon_path:
-        poly_str += 'poly'
+        poly_str += 'poly_'
 
     table_path = f'sampled_{args.point_buffer}m_{landcover_substring}{poly_str}{os.path.basename(args.csv_path)}'
     with open(table_path, 'w') as table_file:
