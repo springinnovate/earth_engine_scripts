@@ -208,7 +208,7 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
                             _calculate_natural_cultivated_masks(
                                 cult_nat_raster_id, year))
                         LOGGER.debug(closest_year)
-                        closest_year_id = f'{cult_nat_raster_id}-closest-year'
+                        closest_year_id = f'{cult_nat_raster_id}-closest-year{band_name_suffix}'
                         band_id_set.add(closest_year_id)
                         band_list.append(ee.Image(
                             int(closest_year)).rename(closest_year_id))
