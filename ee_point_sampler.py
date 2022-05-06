@@ -206,7 +206,7 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
                     if cult_nat_raster_id:
                         natural_mask, cultivated_mask, closest_year = (
                             _calculate_natural_cultivated_masks(
-                                cult_nat_raster_id, year))
+                                cult_nat_raster_id, active_year))
                         LOGGER.debug(closest_year)
                         closest_year_id = f'{cult_nat_raster_id}-closest-year{band_name_suffix}'
                         band_id_set.add(closest_year_id)
@@ -375,8 +375,13 @@ def main():
     # take out the point table columns so we can do them first
     sample_keys = list(sorted(sample_keys))
     table_keys = point_table.columns
+    
+    poly_str = '_'
+    if args.polygon_path:
+        poly_str += 'poly'
 
-    with open(f'sampled_{args.point_buffer}m_{landcover_substring}_{os.path.basename(args.csv_path)}', 'w') as table_file:
+    table_path = f'sampled_{args.point_buffer}m_{landcover_substring}{poly_str}{os.path.basename(args.csv_path)}'
+    with open(table_path, 'w') as table_file:
         table_file.write(
             ','.join(table_keys) + f',{",".join(sample_keys)}\n')
         for sample in sample_list:
