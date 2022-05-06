@@ -263,13 +263,13 @@ def _sample_modis_by_year(pts_by_year, cult_ag_id_list, ee_poly, sample_scale):
                 feature_area = feature.area()
                 area_in = ee_poly.intersection(feature.geometry()).area()
                 return feature.set({
-                    POLY_OUT_FIELD: feature_area.subtract(area_in),
-                    POLY_IN_FIELD: area_in})
+                    POLY_OUT_FIELD: (
+                        feature_area.subtract(area_in)).divide(feature_area),
+                    POLY_IN_FIELD: area_in.divide(feature_area)})
             year_points = year_points.map(area_in_out)
             band_id_set = band_id_set.union(
                 set([POLY_OUT_FIELD, POLY_IN_FIELD]))
 
-            task = None
             for band in list(band_list):
                 poly_mask = band.select(0).mask(
                     ee.Image(1).clip(ee_poly)).unmask().gt(0)
