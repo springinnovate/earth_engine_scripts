@@ -146,10 +146,10 @@ def _calculate_natural_cultivated_masks(dataset_id, year):
         'cultivated_mask': ee.Image(0)
     }
     for mask_id, id_list, band_name in [
-            ('natural_mask',
-             raster['cultivated_id_list'], raster['natural_field']),
             ('cultivated_mask',
-             raster['natural_id_list'], raster['cultivated_field'])]:
+             raster['cultivated_id_list'], raster['cultivated_field']),
+            ('natural_mask',
+             raster['natural_id_list'], raster['natural_field'])]:
         for (low_id, high_id) in id_list:
             mask_dict[mask_id] = mask_dict[mask_id].Or(
                 landcover_image.gte(low_id).And(landcover_image.lte(high_id)))
@@ -161,15 +161,15 @@ def _calculate_natural_cultivated_masks(dataset_id, year):
         closest_year)
 
 
-def _sample_modis_by_year(pts_by_year, cult_ag_id_list, ee_poly, sample_scale):
+def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_scale):
     """Sample MODIS variables by year with NLCD/CORINE/polygon intersection.
 
     Sample all variables from https://docs.google.com/spreadsheets/d/1nbmCKwIG29PF6Un3vN6mQGgFSWG_vhB6eky7wVqVwPo
 
     Args:
         pts_by_year (dict): dictionary of list of points indexed by year.
-        cult_ag_id_list (list): list of entries in RASTER_DB that are used
-            for cultivated and agricultural masking to additionally mask
+        cult_nat_raster_id_list (list): list of entries in RASTER_DB that are used
+            for cultivated and natural masking to additionally mask
             MODIS products
         ee_poly (ee.Polygon): if not None, additionally filter samples by
             in/out of polygon.
@@ -202,19 +202,19 @@ def _sample_modis_by_year(pts_by_year, cult_ag_id_list, ee_poly, sample_scale):
                 LOGGER.info(
                     f'modis active_year: {active_year}/{band_name_suffix}')
 
-                for cult_ag_id in [''] + cult_ag_id_list:
-                    if cult_ag_id:
+                for cult_nat_raster_id in [''] + cult_nat_raster_id_list:
+                    if cult_nat_raster_id:
                         natural_mask, cultivated_mask, closest_year = (
                             _calculate_natural_cultivated_masks(
-                                cult_ag_id, year))
+                                cult_nat_raster_id, year))
                         LOGGER.debug(closest_year)
-                        closest_year_id = f'{cult_ag_id}-closest-year'
+                        closest_year_id = f'{cult_nat_raster_id}-closest-year'
                         band_id_set.add(closest_year_id)
                         band_list.append(ee.Image(
                             int(closest_year)).rename(closest_year_id))
                         mask_loop_args = [
-                            (natural_mask, f'-{cult_ag_id}-natural{band_name_suffix}'),
-                            (cultivated_mask, f'-{cult_ag_id}-cultivated{band_name_suffix}')]
+                            (natural_mask, f'-{cult_nat_raster_id}-natural{band_name_suffix}'),
+                            (cultivated_mask, f'-{cult_nat_raster_id}-cultivated{band_name_suffix}')]
 
                         for mask_raster, band_suffix in mask_loop_args:
                             cult_ag_band_id = f'{band_suffix[1:]}'
@@ -273,7 +273,7 @@ def _sample_modis_by_year(pts_by_year, cult_ag_id_list, ee_poly, sample_scale):
             for band in list(band_list):
                 poly_mask = band.select(0).mask(
                     ee.Image(1).clip(ee_poly)).unmask().gt(0)
-                inv_polymask = poly_mask.Not()
+                inv_polymask = poly_mask.Not().unmask()
 
                 band_name_list = band.bandNames().getInfo()
                 poly_in_band_names = [
@@ -298,6 +298,17 @@ def _sample_modis_by_year(pts_by_year, cult_ag_id_list, ee_poly, sample_scale):
             })
         point_sample_list.extend([
             x['properties'] for x in year_point_samples.getInfo()['features']])
+
+        # LOGGER.info('************** exporting asset')
+        # task = ee.batch.Export.image.toAsset(**{
+        #     'image': all_bands,
+        #     'description': 'allbands2',
+        #     'assetId': 'users/richsharp/allbands2',
+        #     'scale': 500,
+        #     'region': ee_poly,
+        #     'crs': 'EPSG:4326', })
+        # task.start()
+        # LOGGER.debug(task)
 
     return band_id_set, point_sample_list
 
@@ -339,11 +350,11 @@ def main():
 
     task_graph = taskgraph.TaskGraph('.', -1)
 
-    cult_ag_id_list = []
+    cult_nat_raster_id_list = []
     if args.nlcd:
-        cult_ag_id_list.append(NLCD_ID)
+        cult_nat_raster_id_list.append(NLCD_ID)
     if args.corine:
-        cult_ag_id_list.append(CORINE_ID)
+        cult_nat_raster_id_list.append(CORINE_ID)
 
     for index in range(math.ceil(point_table.shape[0]/args.batch_size)):
         min_index = index*args.batch_size
@@ -353,7 +364,7 @@ def main():
             args=(
                 point_table, min_index, max_index, args.lat_field,
                 args.long_field, args.year_field, args.point_buffer,
-                cult_ag_id_list, args.polygon_path, args.sample_scale),
+                cult_nat_raster_id_list, args.polygon_path, args.sample_scale),
             store_result=True,
             task_name=f'sample table on index {index}')
 
@@ -378,7 +389,7 @@ def main():
 
 def _sample_table(
         point_table, min_index, max_index, lat_field, long_field, year_field,
-        point_buffer, cult_ag_id_list, polygon_path, sample_scale):
+        point_buffer, cult_nat_raster_id_list, polygon_path, sample_scale):
     local_point_table = point_table[min_index:max_index]
     pts_by_year = _filter_and_buffer_points_by_year(
         local_point_table, lat_field, long_field, year_field, point_buffer)
@@ -391,7 +402,7 @@ def _sample_table(
         ee_poly = _load_ee_poly(polygon_path)
 
     local_sample_keys, local_sample_list = _sample_modis_by_year(
-        pts_by_year, cult_ag_id_list, ee_poly, sample_scale)
+        pts_by_year, cult_nat_raster_id_list, ee_poly, sample_scale)
     return (local_sample_keys, local_sample_list)
 
 
