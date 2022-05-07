@@ -299,16 +299,16 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
         point_sample_list.extend([
             x['properties'] for x in year_point_samples.getInfo()['features']])
 
-        # LOGGER.info('************** exporting asset')
-        # task = ee.batch.Export.image.toAsset(**{
-        #     'image': all_bands,
-        #     'description': 'allbands2',
-        #     'assetId': 'users/richsharp/allbands2',
-        #     'scale': 500,
-        #     'region': ee_poly,
-        #     'crs': 'EPSG:4326', })
-        # task.start()
-        # LOGGER.debug(task)
+        #LOGGER.info('************** exporting asset')
+        #task = ee.batch.Export.image.toAsset(**{
+        # 'image': all_bands,
+        # 'description': 'allbands3',
+        # 'assetId': 'users/richsharp/allbands3',
+        # 'scale': 500,
+        # 'region': ee_poly,
+        # 'crs': 'EPSG:4326', })
+        #task.start()
+        #LOGGER.debug(task)
 
     return band_id_set, point_sample_list
 
