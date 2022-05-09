@@ -30,7 +30,7 @@ CORINE_ID = 'CORINE'
 
 POLY_IN_FIELD = 'POLY-in'
 POLY_OUT_FIELD = 'POLY-out'
-PREV_YEAR_TAG = '-prev-year'
+PREV_YEAR_TAG = '--prev-year'
 
 RASTER_DB = {
     NLCD_ID: {
