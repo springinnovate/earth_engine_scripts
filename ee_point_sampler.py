@@ -293,21 +293,25 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
                     name for name in band_name_list if any(
                         sub in name for sub in
                         RASTER_DB[MODIS_ID]['julian_day_variables'])]
-                julian_day_subset = band.select(julian_day_band_names)
-                band_list.append(julian_day_subset.updateMask(poly_mask).rename(
-                    poly_in_band_names))
-                band_list.append(julian_day_subset.updateMask(inv_polymask).rename(
-                    poly_out_band_names))
+                if julian_day_band_names:
+                    LOGGER.debug(f'julian band names: {julian_day_band_names}')
+                    julian_day_subset = band.select(julian_day_band_names)
+                    band_list.append(julian_day_subset.updateMask(poly_mask).rename(
+                        poly_in_band_names))
+                    band_list.append(julian_day_subset.updateMask(inv_polymask).rename(
+                        poly_out_band_names))
 
                 # All other variables should be proportional and set to 0
                 # outside of their mask with a multiply
                 other_band_names = list(
                     set(band_name_list)-set(julian_day_band_names))
-                other_subset = band.select(other_band_names)
-                band_list.append(other_subset.multiply(poly_mask).rename(
-                    poly_in_band_names))
-                band_list.append(other_subset.multiply(inv_polymask).rename(
-                    poly_out_band_names))
+                if other_band_names:
+                    LOGGER.debug(f'other band names: {other_band_names}')
+                    other_subset = band.select(other_band_names)
+                    band_list.append(other_subset.multiply(poly_mask).rename(
+                        poly_in_band_names))
+                    band_list.append(other_subset.multiply(inv_polymask).rename(
+                        poly_out_band_names))
 
                 # if export_flag:
                 #     LOGGER.info('************** exporting asset')
@@ -340,16 +344,16 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
         point_sample_list.extend([
             x['properties'] for x in year_point_samples.getInfo()['features']])
 
-        LOGGER.info('************** exporting asset')
-        task = ee.batch.Export.image.toAsset(**{
-         'image': all_bands,
-         'description': 'allbands',
-         'assetId': 'users/richsharp/allbands',
-         'scale': 500,
-         'region': ee_poly,
-         'crs': 'EPSG:4326', })
-        task.start()
-        LOGGER.debug(task)
+        # LOGGER.info('************** exporting asset')
+        # task = ee.batch.Export.image.toAsset(**{
+        #  'image': all_bands,
+        #  'description': 'allbands_julian',
+        #  'assetId': 'users/richsharp/allbands_julian',
+        #  'scale': 500,
+        #  'region': ee_poly,
+        #  'crs': 'EPSG:4326', })
+        # task.start()
+        # LOGGER.debug(task)
 
     return band_id_set, point_sample_list
 
