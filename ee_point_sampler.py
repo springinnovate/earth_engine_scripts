@@ -270,11 +270,9 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
             band_id_set = band_id_set.union(
                 set([POLY_OUT_FIELD, POLY_IN_FIELD]))
 
+            poly_mask = ee.Image(0).clip(ee_poly).add(1).unmask()
+            inv_polymask = poly_mask.Not()
             for band in list(band_list):
-                poly_mask = band.select(0).mask(
-                    ee.Image(1).clip(ee_poly)).unmask().gt(0)
-                inv_polymask = poly_mask.Not().unmask()
-
                 band_name_list = band.bandNames().getInfo()
                 poly_in_band_names = [
                     f'{name}-{POLY_IN_FIELD}' for name in band_name_list]
@@ -289,6 +287,27 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
                 band_list.append(band.multiply(inv_polymask).rename(
                     poly_out_band_names))
 
+                # if export_flag:
+                #     LOGGER.info('************** exporting asset')
+                #     task = ee.batch.Export.image.toAsset(**{
+                #         'image': poly_mask,
+                #         'description': 'poly_mask6',
+                #         'assetId': 'users/richsharp/poly_mask6',
+                #         'scale': 500,
+                #         'region': ee_poly,
+                #         'crs': 'EPSG:4326', })
+                #     task.start()
+                #     task = ee.batch.Export.image.toAsset(**{
+                #         'image': inv_polymask,
+                #         'description': 'inv_polymask6',
+                #         'assetId': 'users/richsharp/inv_polymask6',
+                #         'scale': 500,
+                #         'region': ee_poly,
+                #         'crs': 'EPSG:4326', })
+                #     task.start()
+                #     export_flag = False
+                #     LOGGER.debug(task)
+
         all_bands = functools.reduce(lambda x, y: x.addBands(y), band_list)
 
         year_point_samples = all_bands.reduceRegions(**{
@@ -299,16 +318,16 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
         point_sample_list.extend([
             x['properties'] for x in year_point_samples.getInfo()['features']])
 
-        #LOGGER.info('************** exporting asset')
-        #task = ee.batch.Export.image.toAsset(**{
-        # 'image': all_bands,
-        # 'description': 'allbands3',
-        # 'assetId': 'users/richsharp/allbands3',
-        # 'scale': 500,
-        # 'region': ee_poly,
-        # 'crs': 'EPSG:4326', })
-        #task.start()
-        #LOGGER.debug(task)
+        LOGGER.info('************** exporting asset')
+        task = ee.batch.Export.image.toAsset(**{
+         'image': all_bands,
+         'description': 'allbands',
+         'assetId': 'users/richsharp/allbands',
+         'scale': 500,
+         'region': ee_poly,
+         'crs': 'EPSG:4326', })
+        task.start()
+        LOGGER.debug(task)
 
     return band_id_set, point_sample_list
 
@@ -375,7 +394,7 @@ def main():
     # take out the point table columns so we can do them first
     sample_keys = list(sorted(sample_keys))
     table_keys = point_table.columns
-    
+
     poly_str = '_'
     if args.polygon_path:
         poly_str += 'poly_'
