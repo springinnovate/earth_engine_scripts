@@ -275,7 +275,11 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
                 set([POLY_OUT_FIELD, POLY_IN_FIELD]))
 
             for band in list(band_list):
-                band_name_list = band.bandNames().getInfo()
+                # remove the "closest year" constants that don't need masking
+                band_name_list = [
+                    band_name for band_name in band.bandNames().getInfo()
+                    if 'closest-year' not in band_name]
+
                 poly_in_band_names = [
                     f'{name}-{POLY_IN_FIELD}' for name in band_name_list]
                 poly_out_band_names = [
@@ -283,10 +287,26 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
                 band_id_set = band_id_set.union(
                     set(poly_in_band_names+poly_out_band_names))
 
-                band_list.append(band.multiply(poly_mask).rename(
+                # Julian variables should be masked out
+                RASTER_DB[MODIS_ID]['julian_day_variables']
+                julian_day_band_names = [
+                    name for name in band_name_list if any(
+                        sub in name for sub in
+                        RASTER_DB[MODIS_ID]['julian_day_variables'])]
+                julian_day_subset = band.select(julian_day_band_names)
+                band_list.append(julian_day_subset.updateMask(poly_mask).rename(
                     poly_in_band_names))
+                band_list.append(julian_day_subset.updateMask(inv_polymask).rename(
+                    poly_out_band_names))
 
-                band_list.append(band.multiply(inv_polymask).rename(
+                # All other variables should be proportional and set to 0
+                # outside of their mask with a multiply
+                other_band_names = list(
+                    set(band_name_list)-set(julian_day_band_names))
+                other_subset = band.select(other_band_names)
+                band_list.append(other_subset.multiply(poly_mask).rename(
+                    poly_in_band_names))
+                band_list.append(other_subset.multiply(inv_polymask).rename(
                     poly_out_band_names))
 
                 # if export_flag:
