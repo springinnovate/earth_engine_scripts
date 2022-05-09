@@ -190,6 +190,10 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
 
     band_id_set = set()
 
+    if ee_poly:
+        poly_mask = ee.Image(0).clip(ee_poly).add(1).unmask()
+        inv_polymask = poly_mask.Not()
+
     for year in pts_by_year.keys():
         LOGGER.info(f'processing year {year}')
 
@@ -270,8 +274,6 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
             band_id_set = band_id_set.union(
                 set([POLY_OUT_FIELD, POLY_IN_FIELD]))
 
-            poly_mask = ee.Image(0).clip(ee_poly).add(1).unmask()
-            inv_polymask = poly_mask.Not()
             for band in list(band_list):
                 band_name_list = band.bandNames().getInfo()
                 poly_in_band_names = [
