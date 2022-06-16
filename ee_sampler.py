@@ -82,10 +82,10 @@ def _nlcd_natural_cultivated_mask(year, ee_poly):
 
     natural_mask_in = natural_mask.updateMask(polymask)
     cultivated_mask_in = cultivated_mask.updateMask(polymask)
-    closest_year_in = closest_year.updateMask(polymask)
+    #closest_year_in = closest_year.updateMask(polymask)
     natural_mask_out = natural_mask.updateMask(inv_polymask)
     cultivated_mask_out = cultivated_mask.updateMask(inv_polymask)
-    closest_year_out = closest_year.updateMask(inv_polymask)
+    #closest_year_out = closest_year.updateMask(inv_polymask)
 
     return (
         natural_mask_in, cultivated_mask_in,
@@ -284,7 +284,7 @@ def _sample_pheno(pts_by_year, nlcd_flag, corine_flag, ee_poly):
                         nlcd_cultivated_mask_poly_out)
                     nlcd_cultivated_variable_bands_poly_out = \
                         nlcd_cultivated_variable_bands_poly_out.rename([
-                            f'{band_name}-{NLCD_CULTIVATED_FIELD}-{POLY_OUT_FIELD}',
+                            f'{band_name}-{NLCD_CULTIVATED_FIELD}-{POLY_OUT_FIELD}'
                             for band_name in all_band_names])
 
                     nlcd_natural_variable_bands_poly_out = local_band_stack.updateMask(

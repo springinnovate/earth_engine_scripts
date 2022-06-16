@@ -161,7 +161,7 @@ def _calculate_natural_cultivated_masks(dataset_id, year):
         closest_year)
 
 
-def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_scale):
+def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_scale, export_flag):
     """Sample MODIS variables by year with NLCD/CORINE/polygon intersection.
 
     Sample all variables from https://docs.google.com/spreadsheets/d/1nbmCKwIG29PF6Un3vN6mQGgFSWG_vhB6eky7wVqVwPo
@@ -191,8 +191,10 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
     band_id_set = set()
 
     if ee_poly:
-        poly_mask = ee.Image(0).clip(ee_poly).add(1).unmask()
-        inv_polymask = poly_mask.Not()
+        poly_mask = ee.FeatureCollection(
+            ee.Feature(ee_poly)).set('mask', 1).reduceToImage(
+                ['mask'], ee.Reducer.first()).gt(0).unmask()
+        inv_polymask = ee.Image(1).subtract(poly_mask)
 
     for year in pts_by_year.keys():
         LOGGER.info(f'processing year {year}')
@@ -288,7 +290,7 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
                     set(poly_in_band_names+poly_out_band_names))
 
                 # Julian variables should be masked out
-                RASTER_DB[MODIS_ID]['julian_day_variables']
+                # RASTER_DB[MODIS_ID]['julian_day_variables']
                 julian_day_band_names = [
                     name for name in band_name_list if any(
                         sub in name for sub in
@@ -296,10 +298,10 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
                 if julian_day_band_names:
                     LOGGER.debug(f'julian band names: {julian_day_band_names}')
                     julian_day_subset = band.select(julian_day_band_names)
-                    band_list.append(julian_day_subset.updateMask(poly_mask).rename(
-                        poly_in_band_names))
-                    band_list.append(julian_day_subset.updateMask(inv_polymask).rename(
-                        poly_out_band_names))
+                    band_list.append(julian_day_subset.multiply(
+                            poly_mask).rename(poly_in_band_names))
+                    band_list.append(julian_day_subset.multiply(
+                            inv_polymask).rename(poly_out_band_names))
 
                 # All other variables should be proportional and set to 0
                 # outside of their mask with a multiply
@@ -308,10 +310,23 @@ def _sample_modis_by_year(pts_by_year, cult_nat_raster_id_list, ee_poly, sample_
                 if other_band_names:
                     LOGGER.debug(f'other band names: {other_band_names}')
                     other_subset = band.select(other_band_names)
+                    LOGGER.debug(f'*********************************************************** : {poly_mask.getInfo()}\n vs: {other_subset.getInfo()}')
                     band_list.append(other_subset.multiply(poly_mask).rename(
                         poly_in_band_names))
                     band_list.append(other_subset.multiply(inv_polymask).rename(
                         poly_out_band_names))
+
+                    # if 'MODIS-EVI_Area_1-NLCD-natural' in other_band_names:
+                    #     LOGGER.info('************** exporting asset')
+                    #     for name, band in [('other', other_subset), ('polyin', band_list[-2]), ('polyout', band_list[-1])]:
+                    #         task = ee.batch.Export.image.toAsset(**{
+                    #             'image': band,
+                    #             'description': name,
+                    #             'assetId': f'users/richsharp/{name}',
+                    #             'scale': 500,
+                    #             'region': ee_poly,
+                    #             'crs': 'EPSG:4326', })
+                    #         task.start()
 
                 # if export_flag:
                 #     LOGGER.info('************** exporting asset')
@@ -452,7 +467,7 @@ def _sample_table(
         ee_poly = _load_ee_poly(polygon_path)
 
     local_sample_keys, local_sample_list = _sample_modis_by_year(
-        pts_by_year, cult_nat_raster_id_list, ee_poly, sample_scale)
+        pts_by_year, cult_nat_raster_id_list, ee_poly, sample_scale, True)
     return (local_sample_keys, local_sample_list)
 
 
