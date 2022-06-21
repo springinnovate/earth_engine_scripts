@@ -282,14 +282,16 @@ def _sample_modis_by_year(
                         current_year = datetime.strptime(
                             f'{active_year}-01-01', "%Y-%m-%d")
                         days_since_epoch = (current_year - epoch_date).days
-                        julian_day_bands = (
-                            bands_since_1970.toBands()).subtract(days_since_epoch).updateMask(mask_raster)
+                        julian_day_bands = ee.Image(
+                            bands_since_1970.toBands().subtract(
+                                days_since_epoch)).updateMask(mask_raster)
                         band_list.append(
                             julian_day_bands.rename(modis_band_renames))
 
-                        raw_variable_bands = modis_phen.select(
+                        raw_variable_bands = ee.Image(modis_phen.select(
                             modis_db['raw_variables']).filterDate(
-                            f'{active_year}-01-01', f'{active_year}-12-31').toBands().updateMask(mask_raster)
+                            f'{active_year}-01-01', f'{active_year}-12-31')
+                            .toBands()).updateMask(mask_raster)
                         raw_band_renames = [
                             f'{MODIS_ID}-{field}{band_suffix}'
                             for field in modis_db['raw_variables']]
@@ -336,9 +338,9 @@ def _sample_modis_by_year(
                 if julian_day_band_names:
                     LOGGER.debug(f'julian band names: {julian_day_band_names}')
                     julian_day_subset = band.select(julian_day_band_names)
-                    band_list.append(julian_day_subset.multiply(
+                    band_list.append(ee.Image(julian_day_subset).updateMask(
                         polymask).rename(poly_in_band_names))
-                    band_list.append(julian_day_subset.multiply(
+                    band_list.append(ee.Image(julian_day_subset).updateMask(
                             inv_polymask).rename(poly_out_band_names))
 
                 # All other variables should be proportional and set to 0
@@ -347,12 +349,14 @@ def _sample_modis_by_year(
                     set(band_name_list)-set(julian_day_band_names))
                 if other_band_names:
                     LOGGER.debug(f'other band names: {other_band_names}')
-                    other_subset = band.select(other_band_names)
+                    other_subset = ee.Image(band.select(other_band_names))
                     LOGGER.debug(f'*********************************************************** : {polymask.getInfo()}\n vs: {other_subset.getInfo()}')
-                    band_list.append(other_subset.multiply(polymask).rename(
-                        poly_in_band_names))
-                    band_list.append(other_subset.multiply(inv_polymask).rename(
-                        poly_out_band_names))
+                    #band_list.append(ee.Image(other_subset).rename([f'{x}-before' for x in other_band_names]))
+                    band_list.append(ee.Image(other_subset).updateMask(
+                        polymask).rename(poly_in_band_names))
+                    band_list.append(ee.Image(other_subset).updateMask(
+                        inv_polymask).rename(poly_out_band_names))
+                    #band_list.append(ee.Image(other_subset).rename([f'{x}-after' for x in other_band_names]))
 
                     # if 'MODIS-EVI_Area_1-NLCD-natural' in other_band_names:
                     #     LOGGER.info('************** exporting asset')
@@ -406,7 +410,7 @@ def _sample_modis_by_year(
          'description': 'allbands',
          'assetId': 'users/richsharp/allbands',
          'scale': 500,
-         'region': ee_poly,
+         'region': ee_poly.bounds(),
          'crs': 'EPSG:4326', })
         task.start()
         LOGGER.debug(task)
