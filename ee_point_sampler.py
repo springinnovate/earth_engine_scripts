@@ -389,6 +389,8 @@ def _sample_table(
             f'calculating pheno variables for {min_index}:{max_index}')
     local_point_table = point_table[min_index:max_index]
 
+    sample_key_set = set()
+    sample_list = []
     for modis_id, modis_type in [
             (x, 'julian') for x in RASTER_DB[MODIS_ID]['julian_day_variables']] + \
             [(x, 'raw') for x in RASTER_DB[MODIS_ID]['raw_variables']]:
@@ -406,11 +408,20 @@ def _sample_table(
             pts_by_year, cult_nat_raster_id_list, ee_poly, polymask, inv_polymask,
             sample_scale, modis_id, modis_type)
         ee.Reset()
-        print(local_sample_keys)
-        print(local_sample_list)
-        return (local_sample_keys, local_sample_list)
 
-    return (local_sample_keys, local_sample_list)
+        sample_key_set = sample_key_set.union(local_sample_keys)
+        sample_list.append(local_sample_list)
+        if len(sample_list) > 1:
+            break
+
+    print(sample_list)
+    combined_sample_list = []
+    for single_sample_list in zip(*sample_list):
+        print(single_sample_list)
+        combined_sample_list.append(functools.reduce(
+            lambda x, y: x | y, single_sample_list))
+    print(combined_sample_list)
+    return (sample_key_set, combined_sample_list)
 
 
 def main():
