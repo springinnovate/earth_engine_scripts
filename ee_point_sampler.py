@@ -240,8 +240,6 @@ def _sample_modis_by_modis_type_year(
 
     for year in pts_by_year.keys():
         LOGGER.info(f'processing year {year}')
-
-        LOGGER.info('process MODIS')
         band_list = []
         for active_year, band_name_suffix in (
                 (year, ''), (year-1, PREV_YEAR_TAG)):
@@ -255,7 +253,6 @@ def _sample_modis_by_modis_type_year(
                         natural_mask, cultivated_mask, closest_year = (
                             _calculate_natural_cultivated_masks(
                                 cult_nat_raster_id, active_year))
-                        LOGGER.debug(closest_year)
                         closest_year_id = f'{cult_nat_raster_id}-closest-year{band_name_suffix}'
                         band_id_set.add(closest_year_id)
                         band_list.append((ee.Image(
@@ -297,16 +294,14 @@ def _sample_modis_by_modis_type_year(
                             raw_variable_bands = modis_phen.select(modis_id).filterDate(
                                 f'{active_year}-01-01', f'{active_year}-12-31').toBands().updateMask(mask_raster)
                             raw_band_rename = f'{MODIS_ID}-{modis_id}{band_suffix}'
-                            band_id_set = band_id_set.union(set(raw_band_rename))
+                            band_id_set.add(raw_band_rename)
                             band_list.append(
                                 (raw_variable_bands.rename(raw_band_rename),
                                     [raw_band_rename]))
 
-        LOGGER.info(f'summarize by points for year {year}')
         year_points = pts_by_year[year]
         # determine area in/out of point area
         if ee_poly:
-            LOGGER.info('calculate area in/out of polygon per point')
 
             def area_in_out(feature):
                 """Calculate area inside/outside of poly for given feature."""
@@ -322,7 +317,6 @@ def _sample_modis_by_modis_type_year(
 
             for band, band_name_list in list(band_list):
                 # remove the "closest year" constants that don't need masking
-                print(f'band name list: {band_name_list}')
                 local_band_name_list = [
                     band_name for band_name in band_name_list
                     if 'closest-year' not in band_name]
@@ -336,13 +330,13 @@ def _sample_modis_by_modis_type_year(
 
                 # Julian variables should be masked out
                 # RASTER_DB[MODIS_ID]['julian_day_variables']
+                julian_day_band_names = []
                 if modis_type == 'julian':
                     julian_day_band_names = [
                         name for name in local_band_name_list if any(
                             sub in name for sub in
                             RASTER_DB[MODIS_ID]['julian_day_variables'])]
                     if julian_day_band_names:
-                        LOGGER.debug(f'julian band names: {julian_day_band_names} vs {local_band_name_list}')
                         julian_day_subset = band.select(julian_day_band_names)
                         band_list.append((
                             ee.Image(julian_day_subset).updateMask(
@@ -375,7 +369,6 @@ def _sample_modis_by_modis_type_year(
             'reducer': REDUCER,
             'scale': sample_scale,
             }).getInfo()['features']
-        print(year_point_samples)
         point_sample_list.extend([
             x['properties'] for x in year_point_samples])
 
@@ -385,8 +378,6 @@ def _sample_modis_by_modis_type_year(
 def _sample_table(
         point_table, min_index, max_index, lat_field, long_field, year_field,
         point_buffer, cult_nat_raster_id_list, polygon_path, sample_scale):
-    LOGGER.info(
-            f'calculating pheno variables for {min_index}:{max_index}')
     local_point_table = point_table[min_index:max_index]
 
     sample_key_set = set()
@@ -394,7 +385,7 @@ def _sample_table(
     for modis_id, modis_type in [
             (x, 'julian') for x in RASTER_DB[MODIS_ID]['julian_day_variables']] + \
             [(x, 'raw') for x in RASTER_DB[MODIS_ID]['raw_variables']]:
-
+        LOGGER.debug(f'processing {modis_id}')
         ee.Initialize()
         pts_by_year = _filter_and_buffer_points_by_year(
             local_point_table, lat_field, long_field, year_field, point_buffer)
@@ -408,19 +399,14 @@ def _sample_table(
             pts_by_year, cult_nat_raster_id_list, ee_poly, polymask, inv_polymask,
             sample_scale, modis_id, modis_type)
         ee.Reset()
-
         sample_key_set = sample_key_set.union(local_sample_keys)
         sample_list.append(local_sample_list)
-        if len(sample_list) > 1:
-            break
 
-    print(sample_list)
     combined_sample_list = []
     for single_sample_list in zip(*sample_list):
         print(single_sample_list)
         combined_sample_list.append(functools.reduce(
             lambda x, y: x | y, single_sample_list))
-    print(combined_sample_list)
     return (sample_key_set, combined_sample_list)
 
 
@@ -455,7 +441,6 @@ def main():
         },
         nrows=args.n_rows)
 
-    LOGGER.info(f'break out points by year and buffer to {args.point_buffer}m')
     sample_keys = set()
     sample_list = []
 
