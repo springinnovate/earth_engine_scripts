@@ -406,6 +406,8 @@ def _sample_table(
             pts_by_year, cult_nat_raster_id_list, ee_poly, polymask, inv_polymask,
             sample_scale, modis_id, modis_type)
         ee.Reset()
+        print(local_sample_keys)
+        print(local_sample_list)
         return (local_sample_keys, local_sample_list)
 
     return (local_sample_keys, local_sample_list)
