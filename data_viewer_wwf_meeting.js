@@ -102,7 +102,7 @@ var panel_list = [];
           }
           active_context.raster = ee.Image.loadGeoTIFF(datasets[key]);
 
-          var mean_reducer = ee.Reducer.percentile([10, 90], ['p10', 'p90']);
+          var mean_reducer = ee.Reducer.percentile([90], ['p90']);
           var meanDictionary = active_context.raster.reduceRegion({
             reducer: mean_reducer,
             geometry: active_context.map.getBounds(true),
@@ -111,10 +111,11 @@ var panel_list = [];
 
           ee.data.computeValue(meanDictionary, function (val) {
             active_context.visParams = {
-              min: val['B0_p10'],
-              max: val['B0_p90'],
+              min: 0,
+              max: val['B0'],
               palette: active_context.visParams.palette,
             };
+            console.log(val);
             active_context.last_layer = active_context.map.addLayer(
               active_context.raster, active_context.visParams);
             min_val.setValue(active_context.visParams.min, false);
