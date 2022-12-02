@@ -3,9 +3,8 @@ var datasets = {
     'coastal_risk_reduction_total_value_sum_ph_baseline': 'gs://ecoshard-root/wwf_meeting_viewer/cog_coastal_risk_reduction_total_value_sum_ph_baseline.tif',
     'sed_export_wwf_ph_baseline': 'gs://ecoshard-root/wwf_meeting_viewer/cog_stitched_sed_export_wwf_ph_baseline.tif',
     'usle_wwf_ph_baseline': 'gs://ecoshard-root/wwf_meeting_viewer/cog_stitched_usle_wwf_ph_baseline.tif',
-    'sed_deposition_wwf_ph_baseline': 'gs://ecoshard-root/wwf_meeting_viewer/cog_stitched_sed_deposition_wwf_ph_baseline.tif',
+    //'sed_deposition_wwf_ph_baseline': 'gs://ecoshard-root/wwf_meeting_viewer/cog_stitched_sed_deposition_wwf_ph_baseline.tif',
     'sed_retention_wwf_ph_baseline': 'gs://ecoshard-root/wwf_meeting_viewer/cog_stitched_sed_retention_wwf_ph_baseline.tif',
-
     'global_n_export_esamod2': 'gs://ecoshard-root/wwf_meeting_viewer/cog_global_n_export_esamod2_compressed_md5_96c12f4f833498771d18b131b8cbb49b.tif',
     'global_sed_deposition_esamod2': 'gs://ecoshard-root/wwf_meeting_viewer/cog_global_sed_deposition_esamod2_compressed_md5_ff134776cd7d9d69dc5e2fe14b53474c.tif',
     'global_sed_export_esamod2': 'gs://ecoshard-root/wwf_meeting_viewer/cog_global_sed_export_esamod2_compressed_md5_fa10fd3d1942d0c3ce78b5aa544b150f.tif',
@@ -102,7 +101,7 @@ var panel_list = [];
           }
           active_context.raster = ee.Image.loadGeoTIFF(datasets[key]);
 
-          var mean_reducer = ee.Reducer.percentile([90], ['p90']);
+          var mean_reducer = ee.Reducer.percentile([10, 90], ['p10', 'p90']);
           var meanDictionary = active_context.raster.reduceRegion({
             reducer: mean_reducer,
             geometry: active_context.map.getBounds(true),
@@ -110,12 +109,19 @@ var panel_list = [];
           });
 
           ee.data.computeValue(meanDictionary, function (val) {
-            active_context.visParams = {
-              min: 0,
-              max: val['B0'],
-              palette: active_context.visParams.palette,
-            };
-            console.log(val);
+            if (val['B0_p10'] != val['B0_p90']) {
+              active_context.visParams = {
+                min: val['B0_p10'],
+                max: val['B0_p90'],
+                palette: active_context.visParams.palette,
+              };
+            } else {
+              active_context.visParams = {
+                min: 0,
+                max: val['B0_p90'],
+                palette: active_context.visParams.palette,
+              };
+            }
             active_context.last_layer = active_context.map.addLayer(
               active_context.raster, active_context.visParams);
             min_val.setValue(active_context.visParams.min, false);
